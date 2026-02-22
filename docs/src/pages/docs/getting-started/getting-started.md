@@ -31,7 +31,7 @@ cd <your-app-name>
 
 ### Environment Variables
 
-Copy the example environment files for both `frontend` and `backend` and fill in your values. You can see which variables are required by trying to spin up the app.
+Copy the example environment files for both `frontend` and `backend` and fill in your values. The app validates environment variables at startup using Zod, so you'll get clear error messages if anything is missing.
 
 The backend will show invalid environment variables in the terminal:
 
@@ -67,14 +67,14 @@ This will start:
 - Lib (watches for file changes)
 - Backend API server (defaults to `http://localhost:3000`)
 
-All services support hot module replacement, so your changes will be reflected immediately.
+The frontend and lib support hot module replacement, so your changes will be reflected immediately. The backend uses Bun's `--watch` mode to automatically restart on file changes.
 
 ## Next Steps
 
 Now that you're up and running, here are some recommended next steps:
 
-1. **Explore the Project Structure** - Check out the [Project Structure](/project-structure) guide to understand how everything is organized
-2. **Set Up Authentication** - Configure Auth.js for user authentication
-3. **Read the First Steps Guide** - Head over to [First Steps](/first-steps) for a walkthrough of common tasks
+1. **Explore the project** — Look through `frontend/`, `backend/`, and `lib/` to understand how the monorepo is organized
+2. **Set up authentication** — Configure your Google OAuth credentials in `backend/.env` and push the auth schema with `bun run db:push`
+3. **Build something** — The template is ready to go — start adding routes to the backend and components to the frontend
 
 Happy coding!

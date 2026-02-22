@@ -58,8 +58,8 @@ The generator will:
 
 ### Database Commands
 
-| Command              | Description                     |
-| -------------------- | ------------------------------- |
+| Command               | Description                     |
+| --------------------- | ------------------------------- |
 | `bun run db:generate` | Generate database migrations    |
 | `bun run db:migrate`  | Run database migrations         |
 | `bun run db:push`     | Push schema changes to database |
