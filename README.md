@@ -4,7 +4,9 @@
 
 # Thunder App Template
 
-A modern full-stack monorepo template with Vite + React frontend, Hono backend, and a shared TypeScript `lib` package.
+A modern full-stack monorepo template with Vite + React frontend, Hono backend, and a shared TypeScript `lib` package — all powered by Bun.
+
+**[Documentation](https://www.thunderapp.io)**
 
 ## 🚀 Quickstart
 
@@ -29,13 +31,39 @@ The generator will:
 
 ## 📁 Project Structure
 
-- `frontend/` - Vite React application with Auth.js integration
-- `backend/` - HonoJS API server with Drizzle ORM and Auth.js
-- `lib/` - Shared TypeScript package used by both frontend and backend
-- `.cursor/` - Cursor AI rules for project-aware assistance
-- `backend/src/db/schema/` - Database schema definitions
-  - `users.ts` - User table (merged with auth requirements)
-  - `auth.ts` - Auth.js tables (accounts, sessions, verification tokens)
+```
+my-app/
+├── frontend/               # React + Vite application
+│   ├── src/
+│   │   ├── routes/          # File-based routes (TanStack Router)
+│   │   │   ├── __root.tsx   # Root layout (providers, shared UI)
+│   │   │   └── index.tsx    # Home page (/)
+│   │   ├── api/             # API call utilities
+│   │   ├── components/      # Reusable UI components
+│   │   └── env/             # Environment variable validation
+│   │       ├── schema.ts    # Zod schema (edit this to add vars)
+│   │       ├── validate.ts  # Validation logic
+│   │       └── env.ts       # Typed env object
+│   └── vite.config.ts       # Vite config (plugins, proxy, aliases)
+├── backend/                 # Hono API server
+│   ├── src/
+│   │   ├── index.ts         # Server entry (CORS, CSRF, auth, routes)
+│   │   ├── db/schema/       # Drizzle ORM table definitions
+│   │   ├── env/             # Environment variable validation
+│   │   └── security/        # Rate limiting, token encryption, hashing
+│   └── drizzle.config.ts    # Drizzle Kit config
+├── lib/                     # Shared TypeScript utilities and types
+│   └── src/
+│       ├── utils/           # assertNever, raise, tryCatch, objectUtils
+│       └── types/           # Shared types (User, etc.)
+├── scripts/                 # Dev script (parallel service runner)
+├── .cursor/rules/           # Cursor AI rules for project conventions
+├── .github/workflows/       # CI/CD pipeline
+├── package.json             # Root workspace config & scripts
+├── tsconfig.json            # TypeScript project references
+├── .prettierrc              # Prettier config
+└── .prettierignore          # Files excluded from Prettier
+```
 
 ## 💻 Development Commands (run from repo root)
 
@@ -67,10 +95,11 @@ The generator will:
 
 ## 📦 Using the Shared Library Package
 
-The `lib` package contains shared TypeScript code that can be imported in both the frontend and backend:
+The `lib` package contains shared TypeScript utilities that can be imported in both the frontend and backend:
 
 ```typescript
-import { greet, User } from "@your-project/lib";
+import { raise, tryCatch, tryCatchAsync, assertNever } from "@your-project/lib";
+import type { User } from "@your-project/lib";
 ```
 
 **Important:** If you make changes to the `lib` package, you must rebuild it:
@@ -79,7 +108,7 @@ import { greet, User } from "@your-project/lib";
 bun run build:lib
 ```
 
-Or run it in watch mode during development:
+Or run it in watch mode during development (already included in `bun run dev`):
 
 ```bash
 bun run dev:lib
@@ -123,11 +152,8 @@ This template includes **Auth.js** (formerly NextAuth) integration with **Google
 ### Backend Setup
 
 1. **Set up Google OAuth credentials:**
-   - Go to [Google Cloud Console](https://console.cloud.google.com/)
-   - Create a new project or select an existing one
-   - Enable the **Google+ API** or **People API**
-   - Go to **APIs & Services > Credentials**
-   - Create **OAuth 2.0 Client ID** (Web application)
+   - Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+   - Create a new OAuth 2.0 Client ID (Web application)
    - Add authorized redirect URI: `http://localhost:3000/api/auth/callback/google`
    - Copy the Client ID and Client Secret
 
@@ -136,15 +162,13 @@ This template includes **Auth.js** (formerly NextAuth) integration with **Google
    ```bash
    AUTH_SECRET=your-auth-secret-here  # Generate with: openssl rand -base64 32
    DATABASE_URL=postgresql://user:password@localhost:5432/dbname
-   FRONTEND_URL=http://localhost:5173  # Frontend URL for redirects
+   FRONTEND_URL=http://localhost:5173
    GOOGLE_CLIENT_ID=your-google-client-id
    GOOGLE_CLIENT_SECRET=your-google-client-secret
    PORT=3000
    ```
 
-3. **Database schema is already set up** - The auth tables (`auth_accounts`, `auth_sessions`, etc.) are defined in `backend/src/db/schema/auth.ts` and merged with your `users` table.
-
-4. **Push the auth schema to your database:**
+3. **Push the auth schema to your database:**
 
    ```bash
    bun run db:push
@@ -159,22 +183,15 @@ This template includes **Auth.js** (formerly NextAuth) integration with **Google
    VITE_PORT=5173
    ```
 
-2. **The frontend is already configured** with `SessionProvider` and auth hooks. The sign-in button and session management are ready to use.
+2. **The frontend is already configured** with `SessionProvider` (in `__root.tsx`) and auth hooks. The sign-in button and session management are ready to use.
 
-3. **Vite proxy is configured** - Auth API requests (`/api/auth/*`) are automatically proxied to the backend via `vite.config.ts`. This allows the frontend to use relative URLs for auth endpoints.
+3. **Vite proxy is configured** — Auth API requests (`/api/auth/*`) are automatically proxied to the backend via `vite.config.ts`. This allows the frontend to use relative URLs for auth endpoints.
 
 ### Adding More Providers
 
 To add additional OAuth providers (GitHub, Discord, etc.):
 
-1. **Install the provider** (if needed):
-
-   ```bash
-   cd backend
-   bun add @auth/core/providers/github  # Example for GitHub
-   ```
-
-2. **Add provider to backend** in `backend/src/index.ts`:
+1. **Add provider to backend** in `backend/src/index.ts`:
 
    ```typescript
    import GitHub from "@auth/core/providers/github";
@@ -185,28 +202,13 @@ To add additional OAuth providers (GitHub, Discord, etc.):
    ],
    ```
 
-3. **Add environment variables** to `backend/.env`:
+2. **Add environment variables** to `backend/src/env/env.ts` (schema) and `backend/.env` (values)
 
-   ```bash
-   GITHUB_CLIENT_ID=your-github-client-id
-   GITHUB_CLIENT_SECRET=your-github-client-secret
+3. **Update the frontend sign-in button:**
+
+   ```typescript
+   <button onClick={() => signIn("github")}>Sign in with GitHub</button>
    ```
-
-4. **Update Google Cloud Console** with additional redirect URIs if needed
-
-### Production Setup
-
-For production:
-
-1. **Update Google OAuth redirect URIs** in Google Cloud Console:
-   - Add: `https://your-api-domain.com/api/auth/callback/google`
-
-2. **Update environment variables:**
-   - Set `FRONTEND_URL` to your production frontend URL
-   - Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to production credentials
-   - Ensure `AUTH_SECRET` is a strong, random secret
-
-3. **Update CORS settings** in `backend/src/index.ts` to allow your production frontend domain
 
 ## 🛠️ Tech Stack
 
@@ -215,8 +217,9 @@ For production:
 - **React 19** - UI library
 - **Vite 5** - Build tool and dev server
 - **TypeScript 5.9** - Type safety
+- **TanStack Router** - File-based routing with automatic code splitting
+- **TanStack Query (React Query)** - Data fetching and caching
 - **Tailwind CSS v4** - Styling
-- **React Query (@tanstack/react-query)** - Data fetching and caching
 - **Zod v4** - Runtime type validation
 - **@hono/auth-js/react** - Auth.js React client hooks
 
@@ -225,7 +228,7 @@ For production:
 - **Hono v4** - Fast web framework
 - **TypeScript 5.9** - Type safety
 - **Drizzle ORM** - Type-safe SQL ORM
-- **PostgreSQL** - Database (via `postgres` driver)
+- **PostgreSQL** - Database (via Bun's built-in SQL driver)
 - **Zod v4** - Runtime type validation
 - **Auth.js (@hono/auth-js)** - Authentication framework
 - **@auth/drizzle-adapter** - Drizzle adapter for Auth.js
@@ -236,7 +239,7 @@ For production:
 - **ESLint** - Code linting
 - **Prettier** - Code formatting
 
-## 🔒 Security Defaults in This Template
+## 🔒 Security Defaults
 
 Out of the box, the backend enables several defenses:
 
@@ -244,56 +247,57 @@ Out of the box, the backend enables several defenses:
 - CSRF protection via `hono/csrf`; the frontend sends `X-CSRF-Token` on mutating requests
 - CORS restricted to `FRONTEND_URL` with credentials and `X-CSRF-Token` allowed
 - Rate limiting on `/api/auth/*` (10 requests / 60s per IP+path) to mitigate brute force and callback abuse
-- Sessions and verification tokens are stored as SHA‑256 hashes (no plaintext)
-- OAuth tokens (access/refresh/id) can be encrypted at rest (AES‑256‑GCM) when you set `OAUTH_TOKEN_ENCRYPTION_KEY`
+- Sessions and verification tokens are stored as SHA-256 hashes (no plaintext)
+- OAuth tokens (access/refresh/id) can be encrypted at rest (AES-256-GCM) when you set `OAUTH_TOKEN_ENCRYPTION_KEY`
 
 Recommended hardening for production (left to end users):
 
 - Add a Content Security Policy (CSP) with nonces for scripts
-- Consider an Origin/Referer check for POST/PUT/PATCH/DELETE as defense‑in‑depth
+- Consider an Origin/Referer check for POST/PUT/PATCH/DELETE as defense-in-depth
 - Ensure cookies are `Secure`, `HttpOnly`, and `SameSite=Lax/Strict` behind HTTPS
-- If deploying multiple instances, replace in‑memory rate limiting with a shared store (e.g., Redis)
+- If deploying multiple instances, replace in-memory rate limiting with a shared store (e.g., Redis)
 
 ## 🔧 Environment Variables
 
 ### Backend (`backend/.env`)
 
 ```bash
+# Authentication
+AUTH_SECRET=               # Generate with: openssl rand -base64 32
+
 # Database
 DATABASE_URL=postgresql://user:password@localhost:5432/dbname
 
-# Server
-PORT=3000
+# Environment
+ENVIRONMENT=development    # development | production | testing
 
-# Authentication
-AUTH_SECRET=your-auth-secret-here  # Generate with: openssl rand -base64 32
-FRONTEND_URL=http://localhost:5173  # Frontend URL for redirects after auth
+# Frontend URL (for CORS and auth redirects)
+FRONTEND_URL=http://localhost:5173
 
 # Google OAuth (required)
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
 
-# Additional providers (optional)
-# GITHUB_CLIENT_ID=your-github-client-id
-# GITHUB_CLIENT_SECRET=your-github-client-secret
+# Token encryption (optional — encrypts OAuth tokens at rest)
+OAUTH_TOKEN_ENCRYPTION_KEY=   # Generate with: openssl rand -base64 32
 
-# Token encryption (optional)
-# When set, OAuth tokens are encrypted at rest (AES-256-GCM). Generate with: openssl rand -base64 32
-OAUTH_TOKEN_ENCRYPTION_KEY=
+# Server
+PORT=3000
 ```
 
 **Required variables:**
 
-- `DATABASE_URL` - PostgreSQL connection string
 - `AUTH_SECRET` - Secret for signing sessions (generate with `openssl rand -base64 32`)
+- `DATABASE_URL` - PostgreSQL connection string
 - `GOOGLE_CLIENT_ID` - Google OAuth client ID
 - `GOOGLE_CLIENT_SECRET` - Google OAuth client secret
 
 **Optional variables:**
 
-- `PORT` - Backend server port (default: `3000`)
+- `ENVIRONMENT` - Runtime environment (default: `development`)
 - `FRONTEND_URL` - Frontend URL for redirects (default: `http://localhost:5173`)
-- Additional provider credentials for other OAuth providers
+- `OAUTH_TOKEN_ENCRYPTION_KEY` - Encrypts OAuth tokens at rest with AES-256-GCM
+- `PORT` - Backend server port (default: `3000`)
 
 ### Frontend (`frontend/.env`)
 
@@ -302,19 +306,21 @@ VITE_BACKEND_URL=http://localhost:3000
 VITE_PORT=5173
 ```
 
-- `VITE_BACKEND_URL` - Backend API URL (default: `http://localhost:3000`)
+- `VITE_BACKEND_URL` - Backend API URL (**required**)
 - `VITE_PORT` - Frontend dev server port (default: `5173`)
 
-**Note:** Vite reads environment variables at config time; restart the dev server after changing `.env` files.
+Environment variables are validated at startup with Zod. The backend logs errors and exits; the frontend renders a friendly error page in the browser. Edit `frontend/src/env/schema.ts` to add new frontend variables.
+
+**Note:** All `VITE_` variables are embedded in the client bundle and publicly visible. Never put secrets in frontend env vars. Restart the dev server after changing `.env` files.
 
 ## 📝 Code Quality
 
 - **TypeScript** - Strict mode enabled across all packages
-- **ESLint** - Type‑aware linting across workspaces (TS project aware):
+- **ESLint** - Type-aware linting across workspaces (TS project aware):
   - Prefer `??` over `||` for defaulting
   - Flag impossible conditions (`@typescript-eslint/no-unnecessary-condition`)
   - Enforce `import type` when symbols are used as types only
-  - JS configs like `postcss.config.js`, `tailwind.config.js` are ignored in typed linting
+  - Alphabetical key sorting for cleaner diffs
 - **Prettier** - Automatic code formatting (configured via `.prettierrc`)
 - **Type checking** - Run `bun run typecheck` to verify all packages
 
@@ -328,9 +334,7 @@ To publish this template to npm so others can use it:
    npm login
    ```
 
-2. **Update the version in package.json** (if needed)
-
-3. **Bump the version and publish to npm:**
+2. **Bump the version and publish to npm:**
 
    ```bash
    npm version patch   # or minor/major as appropriate
@@ -338,7 +342,7 @@ To publish this template to npm so others can use it:
    git push --follow-tags
    ```
 
-4. **Users can then create projects with:**
+3. **Users can then create projects with:**
    ```bash
    bun create thunder-app@latest
    ```
