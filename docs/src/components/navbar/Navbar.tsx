@@ -18,9 +18,6 @@ export const Navbar: React.FC<NavbarProps> = ({ hideLogo }) => {
           to="/"
         >
           <img alt="Thunder App Logo" className="h-15 w-15 drop-shadow-lg" src="/logos/thunder-app.png" />
-          <span className="bg-cyan-500/20 text-cyan-300 text-xs font-bold px-2 py-1 rounded-full border border-cyan-500/40 uppercase tracking-wider">
-            Beta
-          </span>
         </Link>
       )}
       <div className="flex items-center gap-4 text-white/80 pointer-events-auto">

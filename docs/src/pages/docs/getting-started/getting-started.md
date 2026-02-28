@@ -47,7 +47,7 @@ Thunder App uses Drizzle ORM with PostgreSQL. To set up your database:
 
 1. Make sure PostgreSQL is running
 2. Update your database connection string in `backend/.env`
-3. Run the database migrations:
+3. Push the schema to your database:
 
 ```bash
 bun run db:push

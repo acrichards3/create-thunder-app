@@ -87,12 +87,7 @@ export function App() {
     <main className="relative flex flex-1 flex-col items-center gap-32 justify-start px-4 py-12">
       <Navbar hideLogo />
       <div className="flex flex-col items-center gap-6">
-        <div className="flex items-center">
-          <img alt="Thunder App Logo" className="h-40 w-40 drop-shadow-lg" src="/logos/thunder-app.png" />
-          <span className="bg-cyan-500/20 text-cyan-300 text-sm font-bold px-3 py-1.5 rounded-full border border-cyan-500/40 uppercase tracking-wider">
-            Beta
-          </span>
-        </div>
+        <img alt="Thunder App Logo" className="h-40 w-40 drop-shadow-lg" src="/logos/thunder-app.png" />
         <h1 className="text-7xl font-bold text-white drop-shadow-md text-center max-w-5xl">
           Build <span className="text-cyan-400">lightning fast</span> full-stack TypeScript apps with Bun
         </h1>

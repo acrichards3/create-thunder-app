@@ -126,7 +126,7 @@ lib/
 Both `frontend` and `backend` depend on `lib` via `workspace:*`. Import from it like:
 
 ```typescript
-import { raise, tryCatch } from "@your-app/lib";
+import { raise, tryCatch } from "@thunder-app/lib";
 ```
 
 **Important:** After making changes to `lib`, you need to rebuild it (`bun run build:lib`) or run it in watch mode (`bun run dev:lib`) for changes to be picked up by other packages.
