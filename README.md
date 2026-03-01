@@ -4,7 +4,7 @@
 
 # Thunder App Template
 
-A modern full-stack monorepo template with Vite + React frontend, Hono backend, and a shared TypeScript `lib` package — all powered by Bun.
+An AI-first full-stack starter kit with Vite + React frontend, Hono backend, and a shared TypeScript `lib` package — all powered by Bun. Ships with strict linting, post-write hooks, and Cursor rules that keep AI agents writing production-quality code.
 
 **[Documentation](https://www.thunderapp.io)**
 
@@ -27,6 +27,8 @@ The generator will:
 - Copy the template into `./my-app` (or the name you provide)
 - Rename all package scopes to `@<your-app>/...`
 - Seed env files with sensible defaults
+- Optionally include GitHub CI/CD pipeline
+- Optionally configure AI settings (strict ESLint, Cursor rules, post-write hooks)
 - Ask to run `bun install` (workspaces) and optionally build `lib`
 
 ## 📁 Project Structure
@@ -58,6 +60,8 @@ my-app/
 │       └── types/           # Shared types (User, etc.)
 ├── scripts/                 # Dev script (parallel service runner)
 ├── .cursor/rules/           # Cursor AI rules for project conventions
+├── .cursor/hooks/           # Post-write hooks (ESLint, Prettier, tsc, jscpd)
+├── .jscpd.json              # Duplicate code detection config
 ├── .github/workflows/       # CI/CD pipeline
 ├── package.json             # Root workspace config & scripts
 ├── tsconfig.json            # TypeScript project references
@@ -323,6 +327,23 @@ Environment variables are validated at startup with Zod. The backend logs errors
   - Alphabetical key sorting for cleaner diffs
 - **Prettier** - Automatic code formatting (configured via `.prettierrc`)
 - **Type checking** - Run `bun run typecheck` to verify all packages
+
+## 🤖 AI Integration
+
+When you select "Use Thunder App recommended AI settings" during setup, the CLI configures your project for AI-assisted development:
+
+- **Strict ESLint config** — Swaps in a hardened ruleset with `sonarjs`, `unicorn`, and `perfectionist` plugins. Enforces explicit return types, bans type assertions, prevents mutation, limits complexity, and more. Designed to catch the mistakes AI models make most often.
+- **Cursor rules** (`.cursor/rules/`) — Markdown files the AI reads before writing code. Cover component organization, Tailwind conventions, type safety patterns, Zod v4 usage, and Bun APIs.
+- **Post-write hooks** (`.cursor/hooks/`) — Four shell scripts that run automatically after every AI file write:
+  1. **Prettier** — Auto-formats the file
+  2. **ESLint** — Auto-fixes what it can, blocks the write if errors remain
+  3. **TypeScript** — Runs `tsc --noEmit`, blocks on type errors
+  4. **jscpd** — Detects duplicate code, blocks if clones are found
+- **Duplicate detection** (`.jscpd.json`) — Configures thresholds for copy-paste detection
+
+If you opt out of AI settings, you get the standard ESLint config without extra plugins and no `.cursor/` directory.
+
+> **Note:** The hooks require `jq` to be installed on your system. Most macOS and Linux systems have it pre-installed.
 
 ## 🔧 Publishing This Template (For Maintainers)
 

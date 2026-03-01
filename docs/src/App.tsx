@@ -91,6 +91,10 @@ export function App() {
         <h1 className="text-7xl font-bold text-white drop-shadow-md text-center max-w-5xl">
           Build <span className="text-cyan-400">lightning fast</span> full-stack TypeScript apps with Bun
         </h1>
+        <p className="text-gray-400 text-lg max-w-2xl text-center">
+          An AI-first full-stack starter kit with strict linting, post-write hooks, and Cursor rules that keep AI agents
+          writing production-quality code from the first keystroke.
+        </p>
         <Link
           aria-label="View documentation"
           className="group inline-flex items-center gap-2 text-cyan-300 hover:text-cyan-200 text-base sm:text-lg font-semibold tracking-wide transition-colors duration-200"
