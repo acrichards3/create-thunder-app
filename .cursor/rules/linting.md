@@ -11,6 +11,23 @@ Always check linting after making changes. Build and lint pipelines must always 
 - **Ensure builds pass**: Run `bun run build` to verify the code compiles.
 - **Type checking**: Ensure TypeScript type checking passes with `bun run typecheck`.
 
+### Component & File Organization:
+
+- **One component per file** — never define multiple components in a single file.
+- **Group related components in folders** — if a component has child or helper components, create a folder named after the parent and nest them inside. Folders can be nested within folders when the hierarchy calls for it.
+  ```
+  components/
+    Dashboard/
+      Dashboard.tsx
+      DashboardHeader.tsx
+      DashboardChart/
+        DashboardChart.tsx
+        ChartLegend.tsx
+        ChartTooltip.tsx
+      DashboardSidebar.tsx
+  ```
+- **Shared/generic components** that are used across unrelated features can live directly in `components/` without a folder.
+
 ### Strict Code Standards:
 
 - Do not add comments to code — no JSDoc, no inline comments, no block comments. Existing comments that shipped with the template must be left in place.

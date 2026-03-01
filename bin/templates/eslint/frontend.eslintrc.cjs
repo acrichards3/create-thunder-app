@@ -264,6 +264,7 @@ module.exports = {
     "@typescript-eslint/switch-exhaustiveness-check": "error",
 
     // ─── React ───────────────────────────────────────────────
+    "react/no-multi-comp": ["error", { ignoreStateless: false }],
     "react/react-in-jsx-scope": "off",
   },
   overrides: [
