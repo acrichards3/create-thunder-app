@@ -6,6 +6,7 @@ Always check linting after making changes. Build and lint pipelines must always 
 
 - **Fix ALL ESLint errors and warnings**: Treat every ESLint warning as an error. Never leave warnings unresolved.
 - **Never use eslint-disable comments**: Do not suppress lint rules with `// eslint-disable`, `/* eslint-disable */`, or `// eslint-disable-next-line`. Fix the underlying issue instead.
+- **Never modify ESLint configuration**: Do not change `.eslintrc.cjs` files, add overrides, or alter any ESLint rules or settings.
 - **Check linting after changes**: Run `bun run lint` after making code changes.
 - **Ensure builds pass**: Run `bun run build` to verify the code compiles.
 - **Type checking**: Ensure TypeScript type checking passes with `bun run typecheck`.
