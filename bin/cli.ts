@@ -10,7 +10,7 @@ const printBanner = (): void => {
   console.log(BANNER);
 };
 
-const printSuccess = (config: ProjectConfig): void => {
+const printSuccess = (config: ProjectConfig, installed: boolean): void => {
   console.log();
   console.log(colors.green(colors.bold(`✓ Project initialized as "${config.name}"`)));
   console.log(colors.yellow(colors.bold("🚀 Thunder App template initialized!")));
@@ -18,10 +18,17 @@ const printSuccess = (config: ProjectConfig): void => {
   console.log(colors.cyan(colors.bold("📍 Project location:")), colors.gray(config.targetDir));
   console.log();
   console.log(colors.cyan(colors.bold("Next steps:")));
-  console.log(`  1. cd ${config.name}`);
-  console.log("  2. bun install    # installs all workspaces (frontend, lib, backend)");
-  console.log("  3. bun run build:lib");
-  console.log("  4. bun run dev");
+
+  if (installed) {
+    console.log(`  1. cd ${config.name}`);
+    console.log("  2. bun run dev");
+  } else {
+    console.log(`  1. cd ${config.name}`);
+    console.log("  2. bun install    # installs all workspaces (frontend, lib, backend)");
+    console.log("  3. bun run build:lib");
+    console.log("  4. bun run dev");
+  }
+
   console.log();
 };
 
@@ -41,10 +48,10 @@ export async function main(): Promise<void> {
     await transformProject(config);
 
     // Optionally run install
-    await runInstall(config);
+    const installed = await runInstall(config);
 
     // Print success message
-    printSuccess(config);
+    printSuccess(config, installed);
   } finally {
     closeReadline();
   }
