@@ -1,8 +1,7 @@
-import { boolean, integer, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core"; // prettier-ignore
+import { boolean, integer, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { users } from "./users";
 import type { AdapterAccountType } from "@auth/core/adapters";
 
-// Required for linking OAuth accounts (e.g., Google login) to users
 export const accounts = pgTable("auth_accounts", {
   access_token: text("access_token"),
   expires_at: integer("expires_at"),
@@ -23,7 +22,6 @@ export const accountsPK = primaryKey({
   columns: [accounts.provider, accounts.providerAccountId],
 });
 
-// Required for database sessions (stores active sessions server-side)
 export const sessions = pgTable("auth_sessions", {
   expires: timestamp("expires").notNull(),
   sessionToken: text("sessionToken").primaryKey(),
@@ -32,7 +30,6 @@ export const sessions = pgTable("auth_sessions", {
     .references(() => users.id, { onDelete: "cascade" }),
 });
 
-// Optional: For email verification or magic links
 export const verificationTokens = pgTable("auth_verification_tokens", {
   expires: timestamp("expires").notNull(),
   identifier: text("identifier").notNull(),
@@ -43,7 +40,6 @@ export const verificationTokensPK = primaryKey({
   columns: [verificationTokens.identifier, verificationTokens.token],
 });
 
-// Optional: For WebAuthn/passkeys (add if needed later)
 export const authenticators = pgTable("auth_authenticators", {
   counter: integer("counter").notNull(),
   credentialBackedUp: boolean("credentialBackedUp").notNull(),

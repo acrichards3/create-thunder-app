@@ -5,35 +5,53 @@ const errorResponseSchema = z.object({
   message: z.unknown().optional(),
 });
 
+const CSRF_COOKIE_NAMES = ["csrf-token", "XSRF-TOKEN", "_csrf", "csrfToken"];
+const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
 function getCookie(name: string): string | undefined {
   return document.cookie
     .split("; ")
-    .find((row) => row.startsWith(name + "="))
+    .find((row) => row.startsWith(`${name}=`))
     ?.split("=")[1];
 }
 
 function getCsrfToken(): string | undefined {
-  const possibleNames = ["csrf-token", "XSRF-TOKEN", "_csrf", "csrfToken"];
-  for (const n of possibleNames) {
-    const v = getCookie(n);
-    if (v) return decodeURIComponent(v);
+  const found = CSRF_COOKIE_NAMES.map(getCookie).find((v) => v != null);
+  if (found == null) {
+    return undefined;
   }
-  return undefined;
+  return decodeURIComponent(found);
 }
 
-export async function apiFetch(path: string, init?: RequestInit): Promise<unknown> {
-  const url = `${env.VITE_BACKEND_URL}${path}`;
-
-  const method = (init?.method ?? "GET").toUpperCase();
-  const headers = new Headers(init?.headers ?? {});
+function buildHeaders(init: RequestInit | undefined, method: string): Headers {
+  const headers = new Headers(init?.headers);
   if (!headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
-  if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+  if (MUTATION_METHODS.has(method)) {
     const token = getCsrfToken();
-    if (token && !headers.has("X-CSRF-Token")) headers.set("X-CSRF-Token", token);
+    if (token != null && !headers.has("X-CSRF-Token")) {
+      headers.set("X-CSRF-Token", token);
+    }
   }
+
+  return headers;
+}
+
+async function parseErrorMessage(response: Response, isJson: boolean): Promise<string> {
+  const body: unknown = isJson ? await response.json().catch(() => null) : null;
+  const parsed = errorResponseSchema.safeParse(body);
+  if (parsed.success && parsed.data.message != null) {
+    return String(parsed.data.message);
+  }
+  return response.statusText;
+}
+
+export async function apiFetch(path: string, init?: RequestInit): Promise<unknown> {
+  const url = `${env.VITE_BACKEND_URL}${path}`;
+  const method = (init?.method ?? "GET").toUpperCase();
+  const headers = buildHeaders(init, method);
 
   const response = await fetch(url, {
     credentials: "include",
@@ -45,17 +63,13 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<unknow
   const isJson = contentType.includes("application/json");
 
   if (!response.ok) {
-    const body: unknown = isJson ? await response.json().catch(() => undefined) : undefined;
-    const parsed = errorResponseSchema.safeParse(body);
-    const errorMessage =
-      parsed.success && parsed.data.message != null ? String(parsed.data.message) : response.statusText;
-    throw new Error(`Request failed ${response.status}: ${errorMessage}`);
+    const errorMessage = await parseErrorMessage(response, isJson);
+    throw new Error(`Request failed ${String(response.status)}: ${errorMessage}`);
   }
 
   if (!isJson) {
-    console.warn("Response is not JSON");
     return null;
   }
 
-  return await response.json();
+  return response.json();
 }

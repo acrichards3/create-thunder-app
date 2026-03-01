@@ -20,8 +20,12 @@
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "eslint": "^8.57.0",
+    "eslint-plugin-no-comments": "^1.1.10",
+    "eslint-plugin-perfectionist": "3",
+    "eslint-plugin-sonarjs": "^4.0.0",
     "eslint-plugin-sort-keys": "^2.3.5",
     "eslint-plugin-typescript-sort-keys": "^3.3.0",
+    "eslint-plugin-unicorn": "56",
     "typescript": "^5.9.0"
   }
 }

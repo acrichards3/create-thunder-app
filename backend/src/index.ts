@@ -7,14 +7,13 @@ import { db } from "./db/index";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { env } from "./env/env";
 import { Hono } from "hono";
-import { initAuthConfig, verifyAuth, authHandler } from "@hono/auth-js";
+import { authHandler, initAuthConfig, verifyAuth } from "@hono/auth-js";
 import { rateLimit } from "./security/rateLimit";
 import { secureHeaders } from "hono/secure-headers";
 import { users } from "./db/schema/users";
 
 const app = new Hono<{ Variables: { db: typeof db } }>();
 
-// !- Update CORS settings as needed
 app.use(
   "*",
   cors({
@@ -25,28 +24,23 @@ app.use(
   }),
 );
 
-// Set secure headers
 app.use("*", secureHeaders());
-
-// Set CSRF protection
 app.use("*", csrf());
 
-// !- Rate limit auth endpoints (sign-in, callbacks, etc.)
 app.use(
   "/api/auth/*",
   rateLimit({
+    keyGenerator: undefined,
     limit: 10,
     windowMs: 60_000,
   }),
 );
 
-// Middleware to set db in context
-app.use("*", async (c, next) => {
+app.use("*", async (c, next): Promise<void> => {
   c.set("db", db);
   await next();
 });
 
-// Initialize auth config
 app.use(
   "*",
   initAuthConfig((_c) => ({
@@ -61,21 +55,23 @@ app.use(
     ),
     basePath: "/api/auth",
     callbacks: {
-      async redirect({ baseUrl, url }) {
-        // Redirect to frontend after sign-in/sign-out
+      redirect({ baseUrl, url }): string {
         const frontendUrl = env.FRONTEND_URL;
         const frontendOrigin = new URL(frontendUrl).origin;
         const backendOrigin = new URL(baseUrl).origin;
-        // If url is relative, make it absolute using the frontend URL
-        if (url.startsWith("/")) return `${frontendUrl}${url}`;
-
+        if (url.startsWith("/")) {
+          return `${frontendUrl}${url}`;
+        }
         const urlObj = new URL(url);
-        if (urlObj.origin === backendOrigin) return frontendUrl;
-        if (urlObj.origin === frontendOrigin) return url;
+        if (urlObj.origin === backendOrigin) {
+          return frontendUrl;
+        }
+        if (urlObj.origin === frontendOrigin) {
+          return url;
+        }
         return frontendUrl;
       },
     },
-    // ? - Manually add new providers here
     providers: [
       Google({
         clientId: env.GOOGLE_CLIENT_ID,
@@ -84,22 +80,16 @@ app.use(
     ],
     secret: env.AUTH_SECRET,
     session: { strategy: "database" },
-    trustHost: env.ENVIRONMENT === "development" ? true : false,
+    trustHost: env.ENVIRONMENT === "development",
   })),
 );
 
-// Mount auth routes (required for sign-in to work)
 app.use("/api/auth/*", authHandler());
-
-// Set up protected routes
 app.use("/api/protected/*", verifyAuth());
 
-// !- You can delete this example route
 app.get("/", (c) => {
   return c.json({ message: "Hello from Hono!" });
 });
-
-console.log(`🚀 Server running on http://localhost:${env.PORT}`);
 
 export default {
   fetch: app.fetch,

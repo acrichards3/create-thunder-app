@@ -4,10 +4,25 @@ Always check linting after making changes. Build and lint pipelines must always 
 
 ### Rules:
 
-- **Check linting after changes**: Run `bun run lint` or equivalent linting commands after making code changes
-- **Fix linting errors**: Never commit code with linting errors - fix them before completing changes
-- **Ensure builds pass**: Run `bun run build` or equivalent build commands to verify the code compiles
-- **Type checking**: Ensure TypeScript type checking passes with `bun run typecheck` or equivalent
+- **Fix ALL ESLint errors and warnings**: Treat every ESLint warning as an error. Never leave warnings unresolved.
+- **Never use eslint-disable comments**: Do not suppress lint rules with `// eslint-disable`, `/* eslint-disable */`, or `// eslint-disable-next-line`. Fix the underlying issue instead.
+- **Check linting after changes**: Run `bun run lint` after making code changes.
+- **Ensure builds pass**: Run `bun run build` to verify the code compiles.
+- **Type checking**: Ensure TypeScript type checking passes with `bun run typecheck`.
+
+### Strict Code Standards:
+
+- No comments in code (enforced by `no-comments/disallowComments`)
+- No `console.log`, `console.error`, or `console.warn`
+- No type assertions (`as` keyword) — use proper type narrowing instead
+- No mutation of arrays (`.push`, `.pop`, `.sort`, `.reverse`, `.splice`) — use immutable alternatives (`.concat`, `.toSorted`, `.toReversed`, `.toSpliced`)
+- No mutation of objects via property assignment — use spread `{ ...obj, key: value }`
+- No `for...in` or `for...of` loops — use `.map()`, `.filter()`, `.reduce()`, `.forEach()`
+- No inline callbacks in JSX — extract to named functions
+- No inline styles — use Tailwind classes
+- All functions must have explicit return types
+- Max 60 lines per function, max 200 lines per file, max 2 parameters
+- Max cyclomatic complexity of 7, max cognitive complexity of 10
 
 ### Pipeline Requirements:
 
@@ -19,5 +34,5 @@ Always check linting after making changes. Build and lint pipelines must always 
 If you make changes, always verify that:
 
 1. The code builds successfully
-2. Linting passes without errors
+2. Linting passes without errors or warnings
 3. Type checking passes without errors

@@ -6,7 +6,7 @@ import type { ProjectConfig } from "../types";
 const shouldIgnore = (name: string, config: ProjectConfig): boolean => {
   if (IGNORE_ALWAYS.has(name)) return true;
   if (name === ".github" && !config.includeGithub) return true;
-  if (name === ".cursor" && !config.includeCursorRules) return true;
+  if (name === ".cursor" && !config.includeAiSettings) return true;
   return false;
 };
 

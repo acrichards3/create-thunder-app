@@ -1,9 +1,9 @@
 import type { MiddlewareHandler } from "hono";
 
 type RateLimitOptions = {
-  keyGenerator?: (ip: string, path: string) => string;
-  limit: number; // e.g. 10
-  windowMs: number; // e.g. 60_000
+  keyGenerator: ((ip: string, path: string) => string) | undefined;
+  limit: number;
+  windowMs: number;
 };
 
 type Bucket = { count: number; resetAt: number };
@@ -28,8 +28,8 @@ function getClientIp(headers: Headers): string {
 }
 
 export function rateLimit(options: RateLimitOptions): MiddlewareHandler {
-  const { windowMs, limit } = options;
-  const genKey = options.keyGenerator ?? ((ip: string, path: string) => `${ip}:${path}`);
+  const { limit, windowMs } = options;
+  const genKey = options.keyGenerator ?? ((ip: string, path: string): string => `${ip}:${path}`);
 
   return async (c, next) => {
     const ip = getClientIp(c.req.raw.headers);

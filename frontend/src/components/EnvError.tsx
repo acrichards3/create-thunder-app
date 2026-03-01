@@ -1,31 +1,26 @@
 import type { EnvIssue } from "../env/validate";
+import type { ReactNode } from "react";
 
-export function EnvError({ issues }: { issues: EnvIssue[] }) {
+function IssueRow({ issue }: { issue: EnvIssue }): ReactNode {
   return (
-    <div
-      style={{
-        background: "#1a1a1a",
-        color: "#e5e5e5",
-        display: "flex",
-        flexDirection: "column",
-        fontFamily: "ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace",
-        fontSize: "14px",
-        gap: "16px",
-        minHeight: "100vh",
-        padding: "48px",
-      }}
-    >
-      <h1 style={{ color: "#ff6b6b", fontSize: "20px", fontWeight: 700, margin: 0 }}>Invalid Environment Variables</h1>
-      <p style={{ color: "#a3a3a3", margin: 0 }}>
+    <li className="flex gap-2">
+      <span className="text-red-400">{issue.path}</span>
+      <span className="text-neutral-500">&mdash;</span>
+      <span className="text-neutral-400">{issue.message}</span>
+    </li>
+  );
+}
+
+export function EnvError({ issues }: { issues: EnvIssue[] }): ReactNode {
+  return (
+    <div className="bg-zinc-900 text-neutral-200 flex flex-col font-mono text-sm gap-4 min-h-screen p-12">
+      <h1 className="text-red-400 text-xl font-bold">Invalid Environment Variables</h1>
+      <p className="text-neutral-400">
         The following environment variables are missing or invalid. Check your <code>frontend/.env</code> file.
       </p>
-      <ul style={{ display: "flex", flexDirection: "column", gap: "8px", listStyle: "none", margin: 0, padding: 0 }}>
-        {issues.map((issue, i) => (
-          <li key={i} style={{ display: "flex", gap: "8px" }}>
-            <span style={{ color: "#ff6b6b" }}>{issue.path}</span>
-            <span style={{ color: "#737373" }}>—</span>
-            <span style={{ color: "#a3a3a3" }}>{issue.message}</span>
-          </li>
+      <ul className="flex flex-col gap-2 list-none m-0 p-0">
+        {issues.map((issue) => (
+          <IssueRow issue={issue} key={issue.path} />
         ))}
       </ul>
     </div>
