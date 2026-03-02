@@ -17,6 +17,7 @@ WORKDIR /app
 COPY package.json bun.lock ./
 COPY --from=builder /app/lib/package.json ./lib/
 COPY --from=builder /app/lib/dist ./lib/dist
+COPY tsconfig.json ./
 COPY backend/ ./backend/
 COPY frontend/package.json ./frontend/
 RUN bun install --frozen-lockfile --production
