@@ -88,7 +88,7 @@ App Runner is a fully managed container service that auto-scales your backend. Y
 
 If you selected "Include Thunder App quick deploy setup?" during `bun create thunder-app`, the `Dockerfile` and `.dockerignore` are already in your project — skip to step 3.
 
-Multi-stage build — the builder stage compiles `lib` and `backend`, the runner stage copies only the compiled output:
+Multi-stage build — the builder stage compiles only the `lib` package, and the runner copies the backend source directly since Bun runs TypeScript natively:
 
 ```dockerfile
 FROM oven/bun:1 AS builder
@@ -101,9 +101,8 @@ COPY frontend/package.json frontend/
 RUN bun install --frozen-lockfile --force
 
 COPY lib/ ./lib/
-COPY backend/ ./backend/
 COPY tsconfig.json ./
-RUN bun run build:lib && bun run build:backend
+RUN bun run build:lib
 
 FROM oven/bun:1-slim AS runner
 WORKDIR /app
@@ -111,17 +110,16 @@ WORKDIR /app
 COPY package.json bun.lock ./
 COPY --from=builder /app/lib/package.json ./lib/
 COPY --from=builder /app/lib/dist ./lib/dist
-COPY --from=builder /app/backend/package.json ./backend/
-COPY --from=builder /app/backend/dist ./backend/dist
-COPY --from=builder /app/frontend/package.json ./frontend/
+COPY backend/ ./backend/
+COPY frontend/package.json ./frontend/
 RUN bun install --frozen-lockfile --production
 
 ENV PORT=3000
 EXPOSE 3000
-CMD ["bun", "run", "backend/dist/index.js"]
+CMD ["bun", "run", "backend/src/index.ts"]
 ```
 
-The builder copies all workspace `package.json` files (including `frontend/package.json`) so Bun doesn't complain about missing workspaces during install. The runner stage runs `bun install --production` instead of copying `node_modules` from the builder — this ensures workspace symlinks resolve correctly (e.g. `@your-app/lib`).
+The builder only compiles the `lib` package (needed because other workspaces import its compiled output). The backend doesn't need a build step — Bun handles TypeScript natively at runtime, so the runner copies the backend source files directly and runs `backend/src/index.ts`. The runner runs `bun install --production` to resolve workspace symlinks (e.g. `@your-app/lib`) and install runtime dependencies.
 
 #### 2. Create a `.dockerignore` at the repo root
 
@@ -140,7 +138,7 @@ frontend/public
 #### 3. Test the image locally
 
 ```bash
-docker build --platform linux/amd64 -t my-app-backend .
+docker build --platform linux/amd64 -t your-project-name .
 docker run -p 3001:3000 \
   -e ENVIRONMENT=production \
   -e DATABASE_URL=your-database-url \
@@ -148,8 +146,10 @@ docker run -p 3001:3000 \
   -e FRONTEND_URL=http://localhost:5173 \
   -e GOOGLE_CLIENT_ID=your-client-id \
   -e GOOGLE_CLIENT_SECRET=your-client-secret \
-  my-app-backend
+  your-project-name
 ```
+
+Replace `your-project-name` with whatever you want to call the local image (e.g. the name of your project). This is just a local tag — it doesn't need to match your ECR repository name.
 
 > **Important:** Always build with `--platform linux/amd64`. App Runner runs on amd64 — if you build on Apple Silicon without this flag, the image defaults to arm64 and the container will silently fail to start.
 
@@ -201,14 +201,14 @@ aws ecr get-login-password --region your-region \
   | docker login --username AWS --password-stdin \
     your-account-id.dkr.ecr.your-region.amazonaws.com
 
-docker tag my-app-backend:latest \
-  your-account-id.dkr.ecr.your-region.amazonaws.com/my-app-backend:latest
+docker tag your-project-name:latest \
+  your-account-id.dkr.ecr.your-region.amazonaws.com/your-repo-name:latest
 
 docker push \
-  your-account-id.dkr.ecr.your-region.amazonaws.com/my-app-backend:latest
+  your-account-id.dkr.ecr.your-region.amazonaws.com/your-repo-name:latest
 ```
 
-Replace `your-account-id` and `your-region` with your AWS account ID and region.
+Replace `your-account-id`, `your-region`, and `your-repo-name` with your AWS account ID, region, and the ECR repository name you created in step 5.
 
 #### 7. Create an App Runner service
 
