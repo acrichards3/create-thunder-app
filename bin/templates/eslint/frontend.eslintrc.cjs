@@ -9,7 +9,7 @@ module.exports = {
     project: ["./tsconfig.json"],
     tsconfigRootDir: __dirname,
   },
-  plugins: ["@typescript-eslint", "perfectionist", "react", "react-hooks", "unicorn"],
+  plugins: ["@typescript-eslint", "perfectionist", "react", "react-hooks", "react-hooks-extra", "unicorn"],
   extends: [
     "eslint:recommended",
     "plugin:@typescript-eslint/recommended",
@@ -273,6 +273,9 @@ module.exports = {
     "@typescript-eslint/switch-exhaustiveness-check": "error",
 
     // ─── React ───────────────────────────────────────────────
+    "react-hooks-extra/no-direct-set-state-in-use-effect": "error",
+    "react-hooks-extra/no-unnecessary-use-callback": "error",
+    "react-hooks-extra/no-unnecessary-use-memo": "error",
     "react/no-multi-comp": ["error", { ignoreStateless: false }],
     "react/react-in-jsx-scope": "off",
   },
