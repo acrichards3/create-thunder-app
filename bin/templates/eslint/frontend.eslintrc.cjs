@@ -98,7 +98,7 @@ module.exports = {
       },
       {
         selector: "JSXAttribute[name.name='className'] TemplateLiteral",
-        message: "No template literals in className. Use cn() from @/lib/utils instead.",
+        message: "No template literals in className. Use cn() from ~/lib/utils instead.",
       },
       {
         selector: "BinaryExpression[operator='==='][right.value='']",
