@@ -27,7 +27,6 @@
     "@typescript-eslint/parser": "^7.0.0",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.27",
-    "dotenv": "^17.2.3",
     "eslint": "^8.57.0",
     "eslint-plugin-no-comments": "^1.1.10",
     "eslint-plugin-perfectionist": "3",
