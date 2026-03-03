@@ -68,6 +68,14 @@ module.exports = {
         selector: "BinaryExpression[operator='!=='][left.type='Identifier'][left.name='undefined']",
         message: "Avoid explicit !== undefined comparisons. Prefer nullish checks or refine types.",
       },
+      {
+        selector: "CallExpression[callee.property.name='then']",
+        message: "No .then(). Use async/await instead.",
+      },
+      {
+        selector: "CallExpression[callee.property.name='catch']",
+        message: "No .catch(). Use try/catch with async/await instead.",
+      },
     ],
     "react/jsx-sort-props": ["error", { ignoreCase: false, noSortAlphabetically: false, reservedFirst: false }],
     "react/react-in-jsx-scope": "off",

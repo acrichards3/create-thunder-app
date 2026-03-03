@@ -27,6 +27,14 @@ module.exports = {
               "LogicalExpression[operator='||']:not([parent.type='IfStatement']):not([parent.type='ConditionalExpression']):not([parent.type='WhileStatement']):not([parent.type='DoWhileStatement']):not([parent.type='ForStatement'])",
             message: "Use ?? for defaulting; || is only allowed in boolean test contexts.",
           },
+          {
+            selector: "CallExpression[callee.property.name='then']",
+            message: "No .then(). Use async/await instead.",
+          },
+          {
+            selector: "CallExpression[callee.property.name='catch']",
+            message: "No .catch(). Use try/catch with async/await instead.",
+          },
         ],
         "@typescript-eslint/strict-boolean-expressions": "off",
         curly: "off",
@@ -44,6 +52,14 @@ module.exports = {
             selector:
               "LogicalExpression[operator='||']:not([parent.type='IfStatement']):not([parent.type='ConditionalExpression']):not([parent.type='WhileStatement']):not([parent.type='DoWhileStatement']):not([parent.type='ForStatement'])",
             message: "Use ?? for defaulting; || is only allowed in boolean test contexts.",
+          },
+          {
+            selector: "CallExpression[callee.property.name='then']",
+            message: "No .then(). Use async/await instead.",
+          },
+          {
+            selector: "CallExpression[callee.property.name='catch']",
+            message: "No .catch(). Use try/catch with async/await instead.",
           },
         ],
         "@typescript-eslint/strict-boolean-expressions": "off",
@@ -64,6 +80,14 @@ module.exports = {
               "LogicalExpression[operator='||']:not([parent.type='IfStatement']):not([parent.type='ConditionalExpression']):not([parent.type='WhileStatement']):not([parent.type='DoWhileStatement']):not([parent.type='ForStatement'])",
             message: "Use ?? for defaulting; || is only allowed in boolean test contexts.",
           },
+          {
+            selector: "CallExpression[callee.property.name='then']",
+            message: "No .then(). Use async/await instead.",
+          },
+          {
+            selector: "CallExpression[callee.property.name='catch']",
+            message: "No .catch(). Use try/catch with async/await instead.",
+          },
         ],
         "@typescript-eslint/strict-boolean-expressions": "off",
         complexity: "off",
@@ -82,6 +106,14 @@ module.exports = {
             selector:
               "LogicalExpression[operator='||']:not([parent.type='IfStatement']):not([parent.type='ConditionalExpression']):not([parent.type='WhileStatement']):not([parent.type='DoWhileStatement']):not([parent.type='ForStatement'])",
             message: "Use ?? for defaulting; || is only allowed in boolean test contexts.",
+          },
+          {
+            selector: "CallExpression[callee.property.name='then']",
+            message: "No .then(). Use async/await instead.",
+          },
+          {
+            selector: "CallExpression[callee.property.name='catch']",
+            message: "No .catch(). Use try/catch with async/await instead.",
           },
         ],
         "unicorn/no-process-exit": "off",
@@ -200,6 +232,14 @@ module.exports = {
       {
         selector: "CallExpression[callee.property.name='fill']",
         message: "No .fill() (mutates in place). Use .map() or Array.from() to create a new array.",
+      },
+      {
+        selector: "CallExpression[callee.property.name='then']",
+        message: "No .then(). Use async/await instead.",
+      },
+      {
+        selector: "CallExpression[callee.property.name='catch']",
+        message: "No .catch(). Use try/catch with async/await instead.",
       },
     ],
 

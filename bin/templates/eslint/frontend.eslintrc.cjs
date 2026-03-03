@@ -160,6 +160,14 @@ module.exports = {
         selector: "CallExpression[callee.property.name='fill']",
         message: "No .fill() (mutates in place). Use .map() or Array.from() to create a new array.",
       },
+      {
+        selector: "CallExpression[callee.property.name='then']",
+        message: "No .then(). Use async/await instead.",
+      },
+      {
+        selector: "CallExpression[callee.property.name='catch']",
+        message: "No .catch(). Use try/catch with async/await instead.",
+      },
     ],
 
     // ─── Unicorn ─────────────────────────────────────────────

@@ -1,3 +1,4 @@
+import { tryCatchAsync } from "@thunder-app/lib";
 import { z } from "zod";
 import { env } from "../env/env";
 
@@ -40,7 +41,7 @@ const buildHeaders = (init: RequestInit | undefined, method: string): Headers =>
 };
 
 const parseErrorMessage = async (response: Response, isJson: boolean): Promise<string> => {
-  const body: unknown = isJson ? await response.json().catch(() => null) : null;
+  const [body] = isJson ? await tryCatchAsync<unknown>(() => response.json()) : [null];
   const parsed = errorResponseSchema.safeParse(body);
   if (parsed.success && parsed.data.message != null) {
     return String(parsed.data.message);
