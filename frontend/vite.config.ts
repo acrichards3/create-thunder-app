@@ -6,9 +6,12 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+const hasEnv = (value: string | undefined): value is string => value != null && value.length > 0;
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd());
-  const vitePort = env.VITE_PORT ? Number(env.VITE_PORT) : 5173;
+  const vitePort = hasEnv(env.VITE_PORT) ? Number(env.VITE_PORT) : 5173;
+  const backendUrl = hasEnv(env.VITE_BACKEND_URL) ? env.VITE_BACKEND_URL : "http://localhost:3000";
 
   return {
     plugins: [
@@ -29,8 +32,11 @@ export default defineConfig(({ mode }) => {
       proxy: {
         "/api/auth": {
           changeOrigin: true,
-          target: env.VITE_BACKEND_URL ?? "http://localhost:3000",
+          target: backendUrl,
         },
+      },
+      watch: {
+        ignored: ["**/routeTree.gen.ts"],
       },
     },
   };
