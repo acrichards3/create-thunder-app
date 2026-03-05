@@ -5,7 +5,11 @@
   "type": "module",
   "description": "A monorepo template with Vite React frontend, HonoJS backend, and shared lib package",
   "license": "MIT",
+  "author": "Alex Richards <alexchristopherrichards@gmail.com>",
   "homepage": "https://www.thunderapp.io",
+  "engines": {
+    "bun": ">=1.2.21"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/acrichards3/thunder-cli.git"

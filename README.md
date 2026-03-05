@@ -4,6 +4,10 @@
 
 # Thunder App Template
 
+[![npm version](https://img.shields.io/npm/v/create-thunder-app)](https://www.npmjs.com/package/create-thunder-app)
+[![CI](https://github.com/acrichards3/thunder-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/acrichards3/thunder-cli/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/create-thunder-app)](./LICENSE)
+
 An AI-first full-stack starter kit with Vite + React frontend, Hono backend, and a shared TypeScript `lib` package — all powered by Bun. Ships with strict linting, post-write hooks, and Cursor rules that keep AI agents writing production-quality code.
 
 **[Documentation](https://www.thunderapp.io)**
