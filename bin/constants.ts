@@ -40,6 +40,6 @@ export const IGNORE_ALWAYS = new Set([
   "bun.lock",
 ]);
 
-export const SKIP_FILES = new Set([".env"]);
+export const SKIP_FILES = new Set([".env", "LICENSE"]);
 
 export const SKIP_EXTENSIONS = [".tsbuildinfo"] as const;
