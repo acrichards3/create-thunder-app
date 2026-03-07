@@ -166,15 +166,19 @@ To add a new utility, create a file in `lib/src/utils/`, export it from `lib/src
 
 Run these from the root of the monorepo:
 
-| Command               | Description                                      |
-| --------------------- | ------------------------------------------------ |
-| `bun run dev`         | Start all dev servers (frontend, backend, lib)   |
-| `bun run build`       | Build everything with typechecking and linting   |
-| `bun run lint`        | Check Prettier formatting and run ESLint         |
-| `bun run lint:fix`    | Auto-fix formatting and lint issues              |
-| `bun run typecheck`   | Run TypeScript type checking across all packages |
-| `bun run format`      | Format all files with Prettier                   |
-| `bun run db:push`     | Push schema changes to the database              |
-| `bun run db:generate` | Generate a Drizzle migration                     |
-| `bun run db:migrate`  | Run pending database migrations                  |
-| `bun run db:studio`   | Open Drizzle Studio for visual database browsing |
+| Command                 | Description                                      |
+| ----------------------- | ------------------------------------------------ |
+| `bun run dev`           | Start all dev servers (frontend, backend, lib)   |
+| `bun run build`         | Build everything with typechecking and linting   |
+| `bun run lint`          | Check Prettier formatting and run ESLint         |
+| `bun run lint:fix`      | Auto-fix formatting and lint issues              |
+| `bun run test`          | Run all tests across all packages                |
+| `bun run test:frontend` | Run tests in the frontend package only           |
+| `bun run test:backend`  | Run tests in the backend package only            |
+| `bun run test:lib`      | Run tests in the lib package only                |
+| `bun run typecheck`     | Run TypeScript type checking across all packages |
+| `bun run format`        | Format all files with Prettier                   |
+| `bun run db:push`       | Push schema changes to the database              |
+| `bun run db:generate`   | Generate a Drizzle migration                     |
+| `bun run db:migrate`    | Run pending database migrations                  |
+| `bun run db:studio`     | Open Drizzle Studio for visual database browsing |

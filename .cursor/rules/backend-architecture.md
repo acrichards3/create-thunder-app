@@ -9,7 +9,7 @@ backend/src/
   features/
     users/
       users.controller.ts
-      users.action.ts
+      users.actions.ts
       users.service.ts
       users.schema.ts
   db/
@@ -27,7 +27,7 @@ backend/src/
 - Only imports and calls the action layer — never the service layer or `db` directly
 - Catches errors and maps them to appropriate HTTP status codes
 
-**Action** (`*.action.ts`)
+**Actions** (`*.actions.ts`)
 
 - Contains business logic (authorization checks, conditional flows, data transformation)
 - Only imports and calls the service layer — never `db` directly

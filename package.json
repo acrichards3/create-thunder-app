@@ -91,6 +91,10 @@
     "lint": "bun run format:check && bun run lint:eslint",
     "lint:eslint": "bun run --filter '*' lint",
     "lint:fix": "bun run format && bun run --filter '*' lint --fix",
+    "test": "bun test",
+    "test:backend": "bun test --filter backend",
+    "test:frontend": "bun test --filter frontend",
+    "test:lib": "bun test --filter lib",
     "typecheck": "bun tsc -b --clean && bun tsc -b"
   },
   "devDependencies": {
