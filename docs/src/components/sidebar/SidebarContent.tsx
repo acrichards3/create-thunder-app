@@ -73,6 +73,10 @@ export const SIDEBAR_ITEMS = {
         href: "/authjs",
         title: "Auth.js",
       },
+      {
+        href: "/testing",
+        title: "Testing",
+      },
     ],
     order: 2,
     sectionTitle: "Usage",

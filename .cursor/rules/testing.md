@@ -4,17 +4,17 @@ Use Bun's built-in test runner exclusively. Do not install Jest, Vitest, or any 
 
 ### Test File Location
 
-Co-locate test files next to the source file they test.
+Co-locate test files next to the source file they test. Always use `.spec.ts` — not `.test.ts`.
 
 ```
 features/
   users/
     users.controller.ts
-    users.controller.test.ts
-    users.action.ts
-    users.action.test.ts
+    users.controller.spec.ts
+    users.actions.ts
+    users.actions.spec.ts
     users.service.ts
-    users.service.test.ts
+    users.service.spec.ts
 ```
 
 ### Test Structure
@@ -52,11 +52,18 @@ describe("/verify", () => {
 });
 ```
 
+### Assertion Rules
+
+- **One assertion per `it` block** — if a test has multiple assertions, split them into separate `it` blocks. Each test should verify exactly one behavior so failures are immediately clear.
+- **`it` descriptions must start with a verb** — "returns", "throws", "creates", "updates", "deletes", etc. No vague names like "works correctly" or "handles data".
+- **No logic in `it` blocks** — no `if/else`, loops, or try/catch inside `it`. If a test needs branching, it should be separate `it` blocks under different `WHEN`/`AND` describes.
+
 ### Setup and Teardown
 
 - All test setup goes in `beforeEach` blocks — not inside `it` blocks
 - `it` blocks should only run the action being tested and assert the result
 - Teardown/cleanup goes in `afterEach` blocks
+- **No shared mutable state** — each test must be independent. `beforeEach` should reset everything. No test should depend on another test having run first.
 
 ### Mocking
 

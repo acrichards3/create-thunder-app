@@ -24,12 +24,24 @@ module.exports = {
       },
     },
     {
-      files: ["**/*.test.ts", "**/*.spec.ts"],
+      files: ["**/*.spec.ts"],
       rules: {
+        complexity: "off",
         "max-lines": "off",
         "max-lines-per-function": "off",
         "max-nested-callbacks": "off",
         "max-statements": "off",
+        "no-param-reassign": "off",
+        "no-restricted-syntax": [
+          "error",
+          {
+            selector: "CallExpression[callee.name='test']",
+            message: "Use it() instead of test().",
+          },
+        ],
+        "sonarjs/cognitive-complexity": "off",
+        "sonarjs/no-identical-functions": "off",
+        "unicorn/consistent-function-scoping": "off",
       },
     },
   ],
