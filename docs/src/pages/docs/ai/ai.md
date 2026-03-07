@@ -16,27 +16,47 @@ If you say no, you get the standard ESLint config without the extra plugins, and
 
 The strict config builds on top of `@typescript-eslint/recommended-type-checked` and adds rules that target the most common AI mistakes:
 
-| Category         | What it enforces                                                                                                                                                                           |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Complexity**   | Max 7 cyclomatic complexity, max 10 cognitive complexity, max 60 lines per function, max 200 lines per file, max 2 parameters                                                              |
-| **Immutability** | No `.push()`, `.pop()`, `.sort()`, `.reverse()`, `.splice()`, `.fill()`. No object mutation via property assignment. Use spread and immutable alternatives.                                |
-| **Type safety**  | No `any`, no type assertions (`as`), no `@ts-ignore`. Explicit return types on all functions. Strict boolean expressions. All `no-unsafe-*` rules enabled.                                 |
-| **Code style**   | Arrow functions only (`func-style`), no `for...in` or `for...of` loops, no `console.log`, no optional properties (`prop?: T` — use `prop: T \| undefined`), no `=== undefined` comparisons |
-| **Sorting**      | Alphabetical sorting of object keys, interface properties, and object types via `perfectionist`                                                                                            |
+| Category           | What it enforces                                                                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Complexity**     | Max 7 cyclomatic complexity, max 10 cognitive complexity, max 60 lines per function, max 200 lines per file, max 2 parameters                                                              |
+| **Immutability**   | No `.push()`, `.pop()`, `.sort()`, `.reverse()`, `.splice()`, `.fill()`. No object mutation via property assignment. Use spread and immutable alternatives.                                |
+| **Type safety**    | No `any`, no type assertions (`as`), no `@ts-ignore`. Explicit return types on all functions. Strict boolean expressions. All `no-unsafe-*` rules enabled.                                 |
+| **Code style**     | Arrow functions only (`func-style`), no `for...in` or `for...of` loops, no `console.log`, no optional properties (`prop?: T` — use `prop: T \| undefined`), no `=== undefined` comparisons |
+| **Error handling** | No raw `try/catch` blocks — use `tryCatch()` or `tryCatchAsync()` from the lib workspace. No `.then()` or `.catch()` on promises. Use `async`/`await` with the tuple utilities instead.    |
+| **Sorting**        | Alphabetical sorting of object keys, interface properties, and object types via `perfectionist`                                                                                            |
 
 Human developers can use the lighter default config by opting out of AI settings during setup. The strict config is specifically tuned for AI agents that need hard guardrails rather than judgment calls.
 
 ## Cursor Rules
 
-The `.cursor/rules/` directory contains markdown files that the AI model reads before writing code. These cover:
+The `.cursor/rules/` directory contains `.mdc` files with YAML frontmatter that Cursor automatically injects into the AI model's context. These cover:
 
 - **Linting** — Specific ESLint patterns to follow (immutability, return types, complexity), component file organization (one component per file, nested folders for parent components), Tailwind constraints (no margins, flex-only layout, no fixed dimensions), and verification steps.
-- **Types** — Never use `any`, no type assertions, use `unknown` with Zod validation for type narrowing.
+- **Types** — Never use `any`, no type assertions, use `unknown` with Zod validation for type narrowing. Prefer `as const` and `satisfies`.
+- **Shared utilities** — Use `tryCatch`/`tryCatchAsync` instead of raw try/catch blocks. Use `raise()` with `??`. Use typed object helpers. Use the `using` keyword for resource cleanup instead of `finally`.
+- **React** — Always use `React.FC` for component typing. Never destructure React imports — use the `React.` namespace.
+- **Backend architecture** — Controller → Actions → Service layered pattern. Each feature gets its own folder with strict dependency direction.
 - **Zod** — Use Zod v4 syntax (`z.url()` instead of `z.string().url()`).
 - **Bun** — Use Bun APIs and commands (`bun add`, `bunx`, `Bun.file()`) instead of Node equivalents.
+- **Stack** — Allowed technologies, path aliases (`~/` not `@/`), config files not to modify.
+- **Testing** — WHEN/AND/it test structure, `.spec.ts` file naming, Bun test runner conventions.
 - **Verification** — Check linting, builds, and type checking after every change.
 
-Rules are pre-emptive guidance. They reduce first-pass errors but don't enforce anything — that's what the hooks are for.
+Rules use `alwaysApply: true` for general rules or `globs` for file-specific rules, so they're automatically included in the model's context without needing to be manually referenced.
+
+### Testing Conventions
+
+The AI settings also include testing rules that enforce a structured **WHEN / AND / it** test pattern using Bun's built-in test runner. When opted in, your AI agent will write `.spec.ts` files co-located with source code, structure tests as decision trees that mirror code paths, and follow strict rules around setup, assertions, and mocking. See the [Testing](/testing) page for the full convention guide.
+
+### Spec-First Workflow
+
+If you enable the spec-first workflow during setup ("Use AI spec-first workflow?"), the AI agent follows a strict three-step process for every new feature:
+
+1. **Write the specs** — Creates `.spec.ts` files for every layer (controller, actions, service) with empty `it` blocks mapping all code paths using the WHEN/AND/it structure. No implementation code is written.
+2. **Stop and ask** — Presents the test structure and asks you to approve, modify, or add paths before proceeding.
+3. **Implement** — Only after you approve does the AI create the implementation files, fill in the test assertions, and run `bun test` to verify everything passes.
+
+This gives you control over what gets built. You define the behavior through test paths, and the AI builds to match.
 
 ## Post-Write Hooks
 

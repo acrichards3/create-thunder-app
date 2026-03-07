@@ -14,6 +14,7 @@ import { Introduction } from "./pages/docs/introduction/Introduction";
 import { NotFound } from "./pages/NotFound";
 import { ProjectStructure } from "./pages/docs/project-structure/ProjectStructure";
 import { Recommendations } from "./pages/docs/recommendations/Recommendations";
+import { Testing } from "./pages/docs/testing/Testing";
 import { TypeScript } from "./pages/docs/typescript/TypeScript";
 import { Vite } from "./pages/docs/vite/Vite";
 
@@ -79,6 +80,11 @@ const routes = {
     component: Recommendations,
     getParentRoute: () => rootRoute,
     path: "/recommendations",
+  }),
+  testing: createRoute({
+    component: Testing,
+    getParentRoute: () => rootRoute,
+    path: "/testing",
   }),
   typescript: createRoute({
     component: TypeScript,

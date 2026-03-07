@@ -1,3 +1,8 @@
+---
+description: Tech stack, allowed technologies, and config protection rules
+alwaysApply: true
+---
+
 ## Tech Stack
 
 This is a Bun monorepo with three workspaces. Do not introduce alternative frameworks, ORMs, routers, or runtimes. Use only the technologies listed below.

@@ -1,0 +1,72 @@
+---
+description: MANDATORY — spec-first workflow. NEVER write implementation code before the user approves the test spec.
+alwaysApply: true
+---
+
+## Spec-First Development Workflow
+
+**This rule is NON-NEGOTIABLE. You MUST follow this workflow for EVERY task that involves building, creating, implementing, or adding any feature, endpoint, module, or function.**
+
+NEVER write implementation code first. ALWAYS write the test specs first and STOP.
+
+### Step 1 — Write ONLY the specs
+
+Create `.spec.ts` files for EVERY layer of the feature — controller, actions, AND service. Each layer gets its own spec file. Write the full WHEN/AND/it decision tree with empty `it` blocks. Map every code path in every layer.
+
+DO NOT create any other files. DO NOT write controllers, actions, services, schemas, or any implementation code. The ONLY files you create in this step are the `.spec.ts` files.
+
+Example for a "users" feature — you create ALL THREE:
+
+**`users.controller.spec.ts`** — tests the HTTP layer (request validation, status codes, response shapes):
+
+```typescript
+describe("POST /users", () => {
+  describe("WHEN the request body is missing", () => {
+    it("returns a 400", () => {});
+  });
+
+  describe("WHEN the request body is valid", () => {
+    it("returns a 201 with the created user", () => {});
+  });
+});
+```
+
+**`users.actions.spec.ts`** — tests the business logic (authorization, conditional flows, transformations):
+
+```typescript
+describe("createUser", () => {
+  describe("WHEN a user with that email already exists", () => {
+    it("throws a duplicate email error", () => {});
+  });
+
+  describe("WHEN the email is available", () => {
+    it("returns the created user", () => {});
+  });
+});
+```
+
+**`users.service.spec.ts`** — tests the data access layer (queries, inserts, edge cases):
+
+```typescript
+describe("insertUser", () => {
+  describe("WHEN given valid user data", () => {
+    it("inserts the user into the database", () => {});
+  });
+});
+```
+
+### Step 2 — STOP. Ask the user. Wait.
+
+After writing ALL spec files, you MUST STOP. Do not continue. Do not write implementation code.
+
+Present the test structure for ALL layers to the user and ask: "Does this cover all the paths? Should I add, remove, or change anything before I start building?"
+
+**DO NOT PROCEED until the user explicitly approves.** If the user asks for changes to the specs, make them and ask again. Repeat until approved.
+
+### Step 3 — Implement (ONLY after approval)
+
+Only after the user has explicitly approved the specs:
+
+1. Create the implementation files (controller, actions, service, schema)
+2. Fill in the test bodies with real assertions
+3. Run `bun test` and ensure all tests pass

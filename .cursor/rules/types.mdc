@@ -1,3 +1,8 @@
+---
+description: Type safety rules — no any, no type assertions, prefer as const and satisfies
+alwaysApply: true
+---
+
 ## Type Safety
 
 Never use `any` type and avoid type casting. Always properly handle types.

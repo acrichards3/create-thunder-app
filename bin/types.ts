@@ -4,6 +4,7 @@ export interface ProjectConfig {
   includeDeploy: boolean;
   includeGithub: boolean;
   includeAiSettings: boolean;
+  includeSpecFirst: boolean;
 }
 
 export interface PackageJson {

@@ -1,3 +1,8 @@
+---
+description: Zod v4 rules — deprecated v3 methods and their replacements
+alwaysApply: true
+---
+
 ## Zod Version
 
 We are using Zod v4. Do NOT use deprecated Zod v3 syntax.

@@ -1,3 +1,8 @@
+---
+description: Linting, build checks, code standards, and Tailwind layout rules
+alwaysApply: true
+---
+
 ## Linting and Build Checks
 
 Always check linting after making changes. Build and lint pipelines must always pass.

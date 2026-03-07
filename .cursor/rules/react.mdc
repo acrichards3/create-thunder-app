@@ -1,3 +1,9 @@
+---
+description: React conventions — React.FC typing, no destructured imports
+globs: frontend/**/*.tsx, frontend/**/*.ts
+alwaysApply: false
+---
+
 ## React Conventions
 
 ### Component Typing

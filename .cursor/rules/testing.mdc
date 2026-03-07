@@ -1,0 +1,84 @@
+---
+description: Testing conventions — Bun test runner, WHEN/AND structure, spec file rules
+globs: "**/*.spec.ts, **/*.spec.tsx"
+alwaysApply: false
+---
+
+## Testing
+
+Use Bun's built-in test runner exclusively. Do not install Jest, Vitest, or any other test framework. Import everything from `bun:test`.
+
+### Test File Location
+
+Co-locate test files next to the source file they test. Always use `.spec.ts` — not `.test.ts`.
+
+```
+features/
+  users/
+    users.controller.ts
+    users.controller.spec.ts
+    users.actions.ts
+    users.actions.spec.ts
+    users.service.ts
+    users.service.spec.ts
+```
+
+### Test Structure
+
+Use `describe` / `it` (not `test`). Structure tests as a decision tree that mirrors the code paths:
+
+1. **Top-level `describe`** — the function or endpoint being tested
+2. **`describe("WHEN ...")`** — a condition or input scenario
+3. **`describe("AND ...")`** — a deeper branch when paths diverge further
+4. **`it("does X")`** — the leaf assertion, only at the end of a path
+
+Continue nesting `AND` blocks until all code paths are covered.
+
+```typescript
+describe("/verify", () => {
+  describe("WHEN there is no body", () => {
+    it("throws a 400", () => {});
+  });
+
+  describe("WHEN there is a body", () => {
+    describe("AND the body does NOT contain a code AND pin", () => {
+      it("throws a 400", () => {});
+    });
+
+    describe("AND it DOES contain a code and pin", () => {
+      describe("AND the code or pin is INVALID", () => {
+        it("throws a 401", () => {});
+      });
+
+      describe("AND the code and pin are both VALID", () => {
+        it("returns a 200 with the assignedTo", () => {});
+      });
+    });
+  });
+});
+```
+
+### Assertion Rules
+
+- **One assertion per `it` block** — if a test has multiple assertions, split them into separate `it` blocks. Each test should verify exactly one behavior so failures are immediately clear.
+- **`it` descriptions must start with a verb** — "returns", "throws", "creates", "updates", "deletes", etc. No vague names like "works correctly" or "handles data".
+- **No logic in `it` blocks** — no `if/else`, loops, or try/catch inside `it`. If a test needs branching, it should be separate `it` blocks under different `WHEN`/`AND` describes.
+
+### Setup and Teardown
+
+- All test setup goes in `beforeEach` blocks — not inside `it` blocks
+- `it` blocks should only run the action being tested and assert the result
+- Teardown/cleanup goes in `afterEach` blocks
+- **No shared mutable state** — each test must be independent. `beforeEach` should reset everything. No test should depend on another test having run first.
+
+### Mocking
+
+Test real behavior. Do not mock your own code just to make tests pass — if you can run it, run it for real.
+
+Mocks are only acceptable when:
+
+- The dependency is an external API or third-party service you cannot control
+- The real thing has side effects that cannot run in tests (sending emails, processing payments)
+- You need to simulate a specific failure condition (network timeout, DB connection refused)
+
+Never mock a function and then assert that the mock returned what you told it to return. That tests nothing.

@@ -1,0 +1,82 @@
+---
+description: Backend layered architecture — controller, actions, service, schema
+globs: backend/**/*.ts
+alwaysApply: false
+---
+
+## Backend Architecture
+
+The backend follows a layered architecture organized by feature. Each feature lives in its own folder under `backend/src/features/`.
+
+### Folder Structure
+
+```
+backend/src/
+  features/
+    users/
+      users.controller.ts
+      users.actions.ts
+      users.service.ts
+      users.schema.ts
+  db/
+  security/
+  env/
+  index.ts
+```
+
+### Layers
+
+**Controller** (`*.controller.ts`)
+
+- Handles the incoming request and returns the HTTP response
+- Validates request body/params/query using schemas from the `.schema.ts` file
+- Only imports and calls the action layer — never the service layer or `db` directly
+- Catches errors and maps them to appropriate HTTP status codes
+
+**Actions** (`*.actions.ts`)
+
+- Contains business logic (authorization checks, conditional flows, data transformation)
+- Only imports and calls the service layer — never `db` directly
+- Never imports the controller layer
+- Throws domain-specific errors when business rules are violated
+
+**Service** (`*.service.ts`)
+
+- Makes database queries using Drizzle — import `db` and schema tables directly
+- Contains no business logic — just data access
+- Never imports the action or controller layers
+- Returns raw query results; the action layer handles transformation
+
+**Schema** (`*.schema.ts`)
+
+- Defines Zod schemas for request validation (body, params, query)
+- Derive TypeScript types from schemas with `z.infer<typeof schema>`
+- Schemas are imported by controllers for validation
+- Keep schemas in their own file — do not define them inline in controllers
+
+### Dependency Direction
+
+```
+Controller → Action → Service → db
+```
+
+No layer may import from a layer above it. No skipping layers (e.g., controller must not import service directly).
+
+### Schema Example
+
+```typescript
+import { z } from "zod";
+
+const createUserBody = z.object({
+  email: z.email(),
+  name: z.string().min(1),
+});
+
+type CreateUserBody = z.infer<typeof createUserBody>;
+```
+
+### Error Handling
+
+- **Services**: Let database errors bubble up naturally
+- **Actions**: Throw domain errors when business rules fail
+- **Controllers**: Catch errors and return the appropriate HTTP response

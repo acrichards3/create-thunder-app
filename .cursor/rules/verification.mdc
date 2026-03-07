@@ -1,3 +1,8 @@
+---
+description: Mandatory verification steps after code changes — lint, build, typecheck
+alwaysApply: true
+---
+
 ## Code Verification Requirements
 
 After making any code changes, you MUST verify that the code passes all quality checks before considering the task complete.

@@ -232,7 +232,7 @@ If you selected both "Include GitHub CI/CD pipeline?" and "Include Thunder App q
 
 The workflow has two jobs:
 
-1. **build-and-lint** — Runs on every push and pull request. Installs dependencies, builds lib, runs lint, typecheck, and type-checks both frontend and backend.
+1. **build-and-lint** — Runs on every push and pull request. Installs dependencies, builds lib, runs lint, typecheck, tests, and builds both frontend and backend.
 2. **deploy** — Runs only on pushes to `main` after `build-and-lint` passes. Builds a Docker image, pushes it to ECR, triggers App Runner redeployment, and triggers Amplify redeployment.
 
 #### Disable Amplify auto-build

@@ -1,3 +1,8 @@
+---
+description: Bun runtime conventions — use Bun APIs, not Node.js
+alwaysApply: true
+---
+
 ## Runtime Environment
 
 This project uses **Bun** as the runtime, NOT Node.js. Always prefer Bun-specific APIs and conventions.

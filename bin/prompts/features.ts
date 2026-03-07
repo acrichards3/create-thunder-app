@@ -20,3 +20,7 @@ export const promptIncludeDeploy = async (): ReturnType<typeof askYesNo> => {
 export const promptIncludeAiSettings = async (): ReturnType<typeof askYesNo> => {
   return askYesNo("Use Thunder App recommended AI settings?", true);
 };
+
+export const promptIncludeSpecFirst = async (): ReturnType<typeof askYesNo> => {
+  return askYesNo("Use AI spec-first workflow? (AI writes test paths, you approve, AI builds)", true);
+};

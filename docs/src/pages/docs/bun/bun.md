@@ -69,6 +69,7 @@ The root `package.json` provides convenience scripts that wrap the most common c
 | `bun run dev`       | Starts all three dev servers in parallel |
 | `bun run build`     | Full production build with checks        |
 | `bun run lint`      | Prettier + ESLint across all packages    |
+| `bun run test`      | Run all tests across all packages        |
 | `bun run typecheck` | TypeScript check across all packages     |
 
 ## The Dev Script

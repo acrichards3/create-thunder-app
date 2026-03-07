@@ -23,6 +23,33 @@ module.exports = {
         "@typescript-eslint/consistent-type-assertions": "off",
       },
     },
+    {
+      files: ["src/utils/tryCatch.ts"],
+      rules: {
+        "no-restricted-syntax": "off",
+      },
+    },
+    {
+      files: ["**/*.spec.ts"],
+      rules: {
+        complexity: "off",
+        "max-lines": "off",
+        "max-lines-per-function": "off",
+        "max-nested-callbacks": "off",
+        "max-statements": "off",
+        "no-param-reassign": "off",
+        "no-restricted-syntax": [
+          "error",
+          {
+            selector: "CallExpression[callee.name='test']",
+            message: "Use it() instead of test().",
+          },
+        ],
+        "sonarjs/cognitive-complexity": "off",
+        "sonarjs/no-identical-functions": "off",
+        "unicorn/consistent-function-scoping": "off",
+      },
+    },
   ],
   rules: {
     // ─── Complexity bounds ───────────────────────────────────
@@ -123,7 +150,11 @@ module.exports = {
       },
       {
         selector: "CallExpression[callee.property.name='catch']",
-        message: "No .catch(). Use try/catch with async/await instead.",
+        message: "No .catch(). Use tryCatchAsync() from the lib workspace instead.",
+      },
+      {
+        selector: "TryStatement",
+        message: "No try/catch blocks. Use tryCatch() or tryCatchAsync() from the lib workspace instead.",
       },
     ],
 
