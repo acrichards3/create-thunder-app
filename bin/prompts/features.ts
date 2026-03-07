@@ -22,5 +22,5 @@ export const promptIncludeAiSettings = async (): ReturnType<typeof askYesNo> => 
 };
 
 export const promptIncludeSpecFirst = async (): ReturnType<typeof askYesNo> => {
-  return askYesNo("  Use AI spec-first workflow? (AI writes test paths, you approve, AI builds)", true);
+  return askYesNo("Use AI spec-first workflow? (AI writes test paths, you approve, AI builds)", true);
 };

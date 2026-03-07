@@ -22,7 +22,8 @@ The `lib/` workspace exports shared utilities. Before writing new helper functio
 
 - Always check `lib/src/utils/` before writing a new utility function. Do not duplicate existing functionality.
 - If a new utility is generic enough to be shared, add it to `lib/src/utils/` and export it from `lib/src/index.ts`.
-- Use `tryCatch` / `tryCatchAsync` instead of raw try/catch blocks when the tuple return pattern is appropriate.
+- **NEVER use raw try/catch blocks** — use `tryCatch` / `tryCatchAsync` instead. ESLint will reject try/catch statements.
+- If you need guaranteed cleanup (closing connections, releasing resources), use the `using` keyword with `Disposable` / `AsyncDisposable` instead of `finally`. The `tryCatch` utilities do not support `finally`.
 - Use `raise()` with `??` instead of writing multi-line null-check-and-throw blocks.
 - Use `assertNever()` in every switch statement's default case for exhaustive checking.
 - Use the typed object helpers (`objectKeys`, `objectEntries`, `objectFromEntries`) instead of their untyped `Object.*` equivalents.

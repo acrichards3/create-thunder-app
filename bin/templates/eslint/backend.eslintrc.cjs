@@ -33,7 +33,11 @@ module.exports = {
           },
           {
             selector: "CallExpression[callee.property.name='catch']",
-            message: "No .catch(). Use try/catch with async/await instead.",
+            message: "No .catch(). Use tryCatchAsync() from the lib workspace instead.",
+          },
+          {
+            selector: "TryStatement",
+            message: "No try/catch blocks. Use tryCatch() or tryCatchAsync() from the lib workspace instead.",
           },
         ],
         "@typescript-eslint/strict-boolean-expressions": "off",
@@ -59,7 +63,11 @@ module.exports = {
           },
           {
             selector: "CallExpression[callee.property.name='catch']",
-            message: "No .catch(). Use try/catch with async/await instead.",
+            message: "No .catch(). Use tryCatchAsync() from the lib workspace instead.",
+          },
+          {
+            selector: "TryStatement",
+            message: "No try/catch blocks. Use tryCatch() or tryCatchAsync() from the lib workspace instead.",
           },
         ],
         "@typescript-eslint/strict-boolean-expressions": "off",
@@ -86,7 +94,11 @@ module.exports = {
           },
           {
             selector: "CallExpression[callee.property.name='catch']",
-            message: "No .catch(). Use try/catch with async/await instead.",
+            message: "No .catch(). Use tryCatchAsync() from the lib workspace instead.",
+          },
+          {
+            selector: "TryStatement",
+            message: "No try/catch blocks. Use tryCatch() or tryCatchAsync() from the lib workspace instead.",
           },
         ],
         "@typescript-eslint/strict-boolean-expressions": "off",
@@ -134,7 +146,7 @@ module.exports = {
           },
           {
             selector: "CallExpression[callee.property.name='catch']",
-            message: "No .catch(). Use try/catch with async/await instead.",
+            message: "No .catch(). Use tryCatchAsync() from the lib workspace instead.",
           },
         ],
         "unicorn/no-process-exit": "off",
@@ -260,7 +272,11 @@ module.exports = {
       },
       {
         selector: "CallExpression[callee.property.name='catch']",
-        message: "No .catch(). Use try/catch with async/await instead.",
+        message: "No .catch(). Use tryCatchAsync() from the lib workspace instead.",
+      },
+      {
+        selector: "TryStatement",
+        message: "No try/catch blocks. Use tryCatch() or tryCatchAsync() from the lib workspace instead.",
       },
     ],
 

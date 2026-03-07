@@ -24,6 +24,12 @@ module.exports = {
       },
     },
     {
+      files: ["src/utils/tryCatch.ts"],
+      rules: {
+        "no-restricted-syntax": "off",
+      },
+    },
+    {
       files: ["**/*.spec.ts"],
       rules: {
         complexity: "off",
@@ -144,7 +150,11 @@ module.exports = {
       },
       {
         selector: "CallExpression[callee.property.name='catch']",
-        message: "No .catch(). Use try/catch with async/await instead.",
+        message: "No .catch(). Use tryCatchAsync() from the lib workspace instead.",
+      },
+      {
+        selector: "TryStatement",
+        message: "No try/catch blocks. Use tryCatch() or tryCatchAsync() from the lib workspace instead.",
       },
     ],
 
