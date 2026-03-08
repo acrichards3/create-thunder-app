@@ -89,7 +89,7 @@ export function App() {
       <div className="flex flex-col items-center gap-6">
         <img alt="Vex App Logo" className="h-40 w-40 drop-shadow-lg" src="/logos/vex-app.png" />
         <h1 className="text-7xl font-bold text-white drop-shadow-md text-center max-w-5xl">
-          Build <span className="text-violet-400">lightning fast</span> full-stack TypeScript apps with Bun
+          Stop wrestling with annoying <span className="text-violet-400">AI slop</span>
         </h1>
         <p className="text-gray-400 text-lg max-w-2xl text-center">
           An AI-first full-stack starter kit with strict linting, post-write hooks, and Cursor rules that keep AI agents
@@ -124,11 +124,9 @@ export function App() {
       <div className="flex flex-col items-center gap-6 w-full">
         <div className="flex flex-col items-center gap-3 text-center max-w-4xl">
           <h2 className="text-6xl font-bold text-white drop-shadow-md leading-tight">
-            Build fast. <span className="text-violet-400">Run faster.</span>
+            Built on Bun. <span className="text-violet-400">Strict by default.</span>
           </h2>
-          <p className="text-gray-400 text-lg">
-            A lean TypeScript stack tuned for runtime speed and developer experience
-          </p>
+          <p className="text-gray-400 text-lg">A type-safe full-stack powered by Bun with strict guardrails for AI</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl w-full">
           {technologies.map((tech) => (
