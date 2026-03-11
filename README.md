@@ -65,7 +65,8 @@ my-app/
 │       └── types/           # Shared types (User, etc.)
 ├── scripts/                 # Dev script (parallel service runner)
 ├── .cursor/rules/           # Cursor AI rules for project conventions
-├── .cursor/hooks/           # Post-write hooks (ESLint, Prettier, tsc, jscpd)
+├── .cursor/hooks/           # Pre-write and post-write hooks (ESLint, Prettier, tsc, jscpd, spec enforcement)
+├── .spec-pending            # Spec-first workflow lock file (git-ignored, only if spec-first enabled)
 ├── .jscpd.json              # Duplicate code detection config
 ├── .github/workflows/       # CI/CD pipeline
 ├── package.json             # Root workspace config & scripts
@@ -343,7 +344,7 @@ When you select "Use Vex App recommended AI settings" during setup, the CLI conf
 
 - **Strict ESLint config** — Swaps in a hardened ruleset with `sonarjs`, `unicorn`, and `perfectionist` plugins. Enforces explicit return types, bans type assertions, prevents mutation, bans raw `try/catch` blocks (use `tryCatch`/`tryCatchAsync` utilities instead), limits complexity, and more. Designed to catch the mistakes AI models make most often.
 - **Cursor rules** (`.cursor/rules/`) — `.mdc` files with frontmatter that Cursor automatically injects into the AI model's context. Cover component organization, Tailwind conventions, type safety patterns, Zod v4 usage, Bun APIs, backend architecture, and testing conventions.
-- **Spec-first workflow** (optional) — When enabled, the AI writes empty test specs (WHEN/AND/it decision trees) for every layer before writing any implementation code, then stops and asks you to approve the paths before building.
+- **Spec-first workflow** (optional) — When enabled, the AI writes empty test specs (WHEN/AND/it decision trees) for every logical layer before writing any implementation code, then stops and asks you to approve the paths before building. Enforcement is mechanical — a pre-write hook blocks all implementation writes until you approve, using a git-ignored `.spec-pending` marker file at the repo root.
 - **Post-write hooks** (`.cursor/hooks/`) — Four shell scripts that run automatically after every AI file write:
   1. **Prettier** — Auto-formats the file
   2. **ESLint** — Auto-fixes what it can, blocks the write if errors remain

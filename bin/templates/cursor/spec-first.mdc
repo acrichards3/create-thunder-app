@@ -57,16 +57,23 @@ describe("insertUser", () => {
 
 ### Step 2 — STOP. Ask the user. Wait.
 
-After writing ALL spec files, you MUST STOP. Do not continue. Do not write implementation code.
+After writing ALL spec files, you MUST STOP COMPLETELY.
 
-Present the test structure for ALL layers to the user and ask: "Does this cover all the paths? Should I add, remove, or change anything before I start building?"
+**Your response after writing specs must end with exactly this:**
 
-**DO NOT PROCEED until the user explicitly approves.** If the user asks for changes to the specs, make them and ask again. Repeat until approved.
+> "Specs are written. Does this cover all the paths? Should I add, remove, or change anything before I start building? I will not write any implementation code until you explicitly say to proceed."
 
-### Step 3 — Implement (ONLY after approval)
+Then do nothing. Write no files. Make no plans. Do not say "I'll now implement...". Do not say "Next I'll...". Just wait.
 
-Only after the user has explicitly approved the specs:
+**DO NOT PROCEED until the user sends a message that explicitly approves** — something like "looks good", "proceed", "build it", or similar. If the user asks for spec changes, make them and ask again. Repeat until explicitly approved.
 
-1. Create the implementation files (controller, actions, service, schema)
-2. Fill in the test bodies with real assertions
-3. Run `bun test` and ensure all tests pass
+Any message from you that does not end with waiting for approval is a violation of this rule.
+
+### Step 3 — Implement (ONLY after explicit user approval)
+
+Only after the user has sent an explicit approval message:
+
+1. Clear the approval gate by writing an empty string to `.spec-pending` at the repo root
+2. Create the implementation files (controller, actions, service, schema)
+3. Fill in the test bodies with real assertions
+4. Run `bun test` and ensure all tests pass

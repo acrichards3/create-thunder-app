@@ -8,7 +8,7 @@ alwaysApply: true
 
 Use Bun's built-in test runner exclusively. Do not install Jest, Vitest, or any other test framework. Import everything from `bun:test`.
 
-Testing applies to **logical code only** — backend controllers, actions, services, and shared `lib/` utilities. Do not write tests for React components, JSX, or any frontend UI code.
+Testing applies to **logical code only** — files named `*.controller.ts`, `*.actions.ts`, `*.service.ts`, and utilities in `lib/src/`. Do not write tests for Zod schemas, Drizzle table definitions, index files, config files, environment definitions, or any frontend/React/JSX code. If a file contains no branching logic, it does not need a spec.
 
 ### Test File Location
 
@@ -23,6 +23,7 @@ features/
     users.actions.spec.ts
     users.service.ts
     users.service.spec.ts
+    users.schema.ts        ← no spec needed (declaration only)
 ```
 
 ### Test Structure

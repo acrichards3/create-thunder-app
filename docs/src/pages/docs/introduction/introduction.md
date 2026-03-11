@@ -21,6 +21,7 @@ Vex App is designed for AI-assisted development. When you select "Use Vex App re
 - **Strict ESLint config** — A hardened ruleset replaces the default config when AI settings are enabled. It enforces explicit return types, bans type assertions, prevents object and array mutation, limits function complexity, and more. Human developers get a lighter ruleset; AI agents get the strict one.
 - **Cursor rules** — A set of `.cursor/rules/` files tell the AI model exactly how to write code for this stack — component organization, Tailwind conventions, type safety patterns, and which ESLint patterns to follow.
 - **Post-write hooks** — Four shell scripts (`.cursor/hooks/`) run automatically every time the AI writes a file. They format with Prettier, lint with ESLint (auto-fixing what they can), type-check with `tsc`, and scan for duplicate code with `jscpd`. If any check fails, the write is blocked and the AI gets immediate feedback to fix it.
+- **Spec-first workflow** (optional) — When enabled, a pre-write hook blocks the AI from writing any implementation code until a corresponding `.spec.ts` file exists and you've explicitly approved it. The AI writes the test spec first, stops and asks for approval, then implements. Enforcement is mechanical — the AI literally cannot skip the approval step.
 
 The result: AI agents write code that passes the same quality bar as the rest of the codebase, without you having to manually review and fix every file.
 

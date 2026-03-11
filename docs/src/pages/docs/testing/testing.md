@@ -135,3 +135,31 @@ Do not mock your own code just to make tests pass. If you can run it, run it for
 - The dependency is an external API or third-party service you cannot control
 - The real thing has side effects that cannot run in tests (sending emails, processing payments)
 - You need to simulate a specific failure condition (network timeout, DB connection refused)
+
+## Spec-First Workflow
+
+If you opted into the spec-first workflow during setup, the AI agent is required to follow a three-step process for every new feature:
+
+1. **Write the specs** — Creates `.spec.ts` files for every logical layer (controller, actions, service) with empty `it` blocks mapping all code paths in the WHEN/AND/it structure. No implementation code is written.
+2. **Stop and ask** — Presents the test structure and waits for you to approve, modify, or add paths before continuing.
+3. **Implement** — Only after you explicitly approve does the AI write the implementation files, fill in the test bodies, and run `bun test`.
+
+This gives you control over what gets built. You define the behavior through test paths, and the AI builds to match.
+
+### How enforcement works
+
+The workflow is enforced mechanically through two hooks, not just through rules that can be forgotten:
+
+- **`spec-marker.sh`** (`postToolUse`) — fires every time a `.spec.ts` file is written. It appends the spec path to a file called `.spec-pending` at the repo root.
+- **`spec-check.sh`** (`preToolUse`) — fires before every implementation write. If `.spec-pending` has content, it returns `permission: deny` and blocks the write. The AI literally cannot write a controller, actions, or service file while specs are awaiting approval.
+
+When you approve ("looks good", "proceed", "build it"), the AI clears `.spec-pending` by writing an empty string to it, which unblocks the implementation writes.
+
+### The `.spec-pending` file
+
+`.spec-pending` lives at the repo root and is git-ignored. It's a single permanent file that gets reused for every feature:
+
+- **Empty** → no specs are pending, implementation writes are allowed
+- **Has content** → specs are written and awaiting your approval, implementation is blocked
+
+It's seeded empty by the CLI at scaffold time. If a turn is cancelled mid-way and the file is left with stale content, write an empty string to it to reset the lock manually. That's the only time you should ever need to touch it.

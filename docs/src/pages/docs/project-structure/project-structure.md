@@ -15,7 +15,9 @@ my-app/
 ├── lib/               # Shared TypeScript library
 ├── scripts/           # Development scripts
 ├── .cursor/rules/     # Cursor AI rules
+├── .cursor/hooks/     # Post-write and pre-write enforcement hooks
 ├── .github/workflows/ # CI/CD pipeline
+├── .spec-pending      # Spec-first workflow state (git-ignored, managed by hooks)
 ├── package.json       # Root workspace config & scripts
 ├── tsconfig.json      # TypeScript project references
 ├── .prettierrc        # Prettier config
@@ -133,13 +135,14 @@ import { raise, tryCatch } from "@vex-app/lib";
 
 ## Root Configuration
 
-| File              | Purpose                                                                        |
-| ----------------- | ------------------------------------------------------------------------------ |
-| `package.json`    | Workspace definitions, root scripts (`dev`, `build`, `lint`, `format`, `db:*`) |
-| `tsconfig.json`   | TypeScript project references to `frontend`, `lib`, and `backend`              |
-| `.prettierrc`     | Code formatting rules shared across all packages                               |
-| `.prettierignore` | Excludes auto-generated files (e.g. `routeTree.gen.ts`) from formatting        |
-| `.gitignore`      | Ignores `node_modules`, `dist`, `.env`, build artifacts                        |
+| File              | Purpose                                                                                                                                                                                                           |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `package.json`    | Workspace definitions, root scripts (`dev`, `build`, `lint`, `format`, `db:*`)                                                                                                                                    |
+| `tsconfig.json`   | TypeScript project references to `frontend`, `lib`, and `backend`                                                                                                                                                 |
+| `.prettierrc`     | Code formatting rules shared across all packages                                                                                                                                                                  |
+| `.prettierignore` | Excludes auto-generated files (e.g. `routeTree.gen.ts`) from formatting                                                                                                                                           |
+| `.gitignore`      | Ignores `node_modules`, `dist`, `.env`, build artifacts                                                                                                                                                           |
+| `.spec-pending`   | Spec-first workflow lock file — empty means clear to build, content means specs are awaiting approval. Git-ignored, managed automatically by hooks. Only present if spec-first workflow was enabled during setup. |
 
 ## Scripts (`scripts/`)
 
@@ -149,11 +152,34 @@ Contains `dev.ts`, which starts all three packages simultaneously with color-cod
 
 Included rules guide Cursor AI to follow project conventions:
 
-- **bun.md** — Prefer Bun APIs over Node.js equivalents
-- **types.md** — TypeScript strictness and type safety patterns
-- **linting.md** — ESLint rules and code quality expectations
-- **zod.md** — Zod validation patterns
-- **verification.md** — Code verification guidelines
+- **stack.mdc** — Allowed technologies, path aliases (`~/` not `@/`), config files not to modify
+- **bun.mdc** — Prefer Bun APIs over Node.js equivalents
+- **types.mdc** — TypeScript strictness and type safety patterns
+- **linting.mdc** — ESLint rules, component file organization, Tailwind constraints, and code quality expectations
+- **zod.mdc** — Zod v4 syntax and validation patterns
+- **shared-utils.mdc** — When and how to use `tryCatch`, `raise`, typed object helpers
+- **testing.mdc** — WHEN/AND/it test structure, `.spec.ts` file naming, Bun test runner conventions
+- **verification.mdc** — Run linting, type checking, and builds after every change
+
+If the spec-first workflow is enabled, an additional rule is added:
+
+- **spec-first.mdc** — Enforces the three-step spec → approve → implement workflow for every feature
+
+## Cursor Hooks (`.cursor/hooks/`)
+
+Shell scripts that run automatically on every AI file write. The post-write hooks run after every write; the pre-write hook runs before and can block.
+
+**Post-write hooks:**
+
+- **`prettier.sh`** — Auto-formats the written file
+- **`eslint.sh`** — Auto-fixes what it can, blocks if errors remain
+- **`typecheck.sh`** — Runs `tsc --noEmit`, blocks on type errors
+- **`jscpd.sh`** — Detects duplicate code, blocks if clones are found
+
+If the spec-first workflow is enabled, two additional hooks are added:
+
+- **`spec-check.sh`** (pre-write) — Blocks implementation writes if `.spec-pending` has content (specs awaiting approval) or if no co-located spec file exists
+- **`spec-marker.sh`** (post-write) — Writes the spec path into `.spec-pending` whenever a `.spec.ts` file is saved
 
 ## CI/CD (`.github/workflows/`)
 
