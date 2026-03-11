@@ -3,57 +3,75 @@ import { resolve } from "path";
 import type { Subprocess } from "bun";
 
 const colors = {
+  bold: (s: string) => `\x1b[1m${s}\x1b[0m`,
+  blue: (s: string) => `\x1b[34m${s}\x1b[0m`,
   cyan: (s: string) => `\x1b[36m${s}\x1b[0m`,
-  yellow: (s: string) => `\x1b[33m${s}\x1b[0m`,
+  gray: (s: string) => `\x1b[90m${s}\x1b[0m`,
   green: (s: string) => `\x1b[32m${s}\x1b[0m`,
   red: (s: string) => `\x1b[31m${s}\x1b[0m`,
-  blue: (s: string) => `\x1b[34m${s}\x1b[0m`,
-  gray: (s: string) => `\x1b[90m${s}\x1b[0m`,
-  bold: (s: string) => `\x1b[1m${s}\x1b[0m`,
+  yellow: (s: string) => `\x1b[33m${s}\x1b[0m`,
 } as const;
 
 const rootDir = resolve(import.meta.dir, "..");
 
 const SCREEN_CLEAR_RE = /\x1b\[2J|\x1b\[3J|\x1b\[H/g;
 
+// Vite: "Local:   http://localhost:5174/"
+// Bun HTTP server: "Listening on http://localhost:3001/" or "Listening on port 3001"
+const VITE_PORT_RE = /Local:\s+http:\/\/localhost:(\d+)/;
+const BUNO_PORT_RE = /Listening on (?:http:\/\/localhost:|port )(\d+)/;
+
 interface ServiceConfig {
-  emoji: string;
   color: (s: string) => string;
+  defaultPort: number | null;
+  emoji: string;
   name: string;
-  port: string | null;
+  portPattern: RegExp | null;
 }
 
 interface CrashedService {
-  service: string;
   exitCode: number;
-  stderr: string;
+  service: ServiceKey;
 }
 
 const services = {
+  backend: {
+    color: colors.green,
+    defaultPort: 3000,
+    emoji: "🚀",
+    name: "Backend",
+    portPattern: BUNO_PORT_RE,
+  },
   frontend: {
-    emoji: "⚛️",
     color: colors.cyan,
+    defaultPort: 5173,
+    emoji: "⚛️",
     name: "Frontend",
-    port: "5173",
+    portPattern: VITE_PORT_RE,
   },
   lib: {
-    emoji: "📦",
     color: colors.yellow,
+    defaultPort: null,
+    emoji: "📦",
     name: "Lib",
-    port: null,
-  },
-  backend: {
-    emoji: "🚀",
-    color: colors.green,
-    name: "Backend",
-    port: "3000",
+    portPattern: null,
   },
 } as const satisfies Record<string, ServiceConfig>;
 
+type ServiceKey = keyof typeof services;
+
+const isServiceKey = (key: string): key is ServiceKey => key in services;
+
+const detectedPorts: Record<ServiceKey, number | null> = {
+  backend: null,
+  frontend: null,
+  lib: null,
+};
+
 const crashedServices: CrashedService[] = [];
 
-function spawnWithLabel(service: string, command: string[], cwd: string): Subprocess {
-  const config = services[service];
+const spawnWithLabel = (key: ServiceKey, command: string[], cwd: string): Subprocess => {
+  const config = services[key];
   const label = colors.bold(config.color(`[${config.emoji} ${config.name}]`));
 
   console.log(`${label} ${colors.gray(`Starting ${config.name.toLowerCase()}...`)}`);
@@ -65,10 +83,8 @@ function spawnWithLabel(service: string, command: string[], cwd: string): Subpro
     stderr: "pipe",
   });
 
-  const stderrPromise = new Response(proc.stderr).text();
-
-  (async () => {
-    const reader = proc.stdout.getReader();
+  const scanStream = async (stream: ReadableStream<Uint8Array>, isStdout: boolean): Promise<void> => {
+    const reader = stream.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
 
@@ -78,29 +94,52 @@ function spawnWithLabel(service: string, command: string[], cwd: string): Subpro
 
       buffer += decoder.decode(value, { stream: true }).replace(SCREEN_CLEAR_RE, "");
       const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
+      buffer = lines.pop() ?? "";
 
       for (const line of lines) {
-        if (line.trim()) {
+        if (!line.trim()) continue;
+        if (isStdout) {
           console.log(`${label} ${line}`);
+        } else {
+          console.log(`${label} ${colors.red(line)}`);
+        }
+
+        if (config.portPattern !== null && detectedPorts[key] === null) {
+          const match = config.portPattern.exec(line);
+          if (match !== null) {
+            detectedPorts[key] = Number(match[1]);
+          }
         }
       }
     }
 
     if (buffer.trim()) {
-      console.log(`${label} ${buffer}`);
-    }
-  })();
+      if (isStdout) {
+        console.log(`${label} ${buffer}`);
+      } else {
+        console.log(`${label} ${colors.red(buffer)}`);
+      }
 
-  proc.exited.then(async (exitCode) => {
+      if (config.portPattern !== null && detectedPorts[key] === null) {
+        const match = config.portPattern.exec(buffer);
+        if (match !== null) {
+          detectedPorts[key] = Number(match[1]);
+        }
+      }
+    }
+  };
+
+  scanStream(proc.stdout, true).catch(() => {});
+  scanStream(proc.stderr, false).catch(() => {});
+
+  proc.exited.then((exitCode) => {
     if (exitCode !== 0) {
-      const stderr = await stderrPromise;
-      crashedServices.push({ service, exitCode, stderr });
+      crashedServices.push({ exitCode, service: key });
     }
   });
 
   return proc;
-}
+};
 
 console.log();
 console.log(colors.bold(colors.blue("╔════════════════════════════════════════╗")));
@@ -112,54 +151,72 @@ const libProc = spawnWithLabel("lib", ["bun", "run", "dev"], resolve(rootDir, "l
 const backendProc = spawnWithLabel("backend", ["bun", "run", "dev"], resolve(rootDir, "backend"));
 const frontendProc = spawnWithLabel("frontend", ["bun", "run", "dev"], resolve(rootDir, "frontend"));
 
-setTimeout(() => {
+const resolvePort = (key: ServiceKey): number | null => detectedPorts[key] ?? services[key].defaultPort;
+
+const waitForPorts = (): Promise<void> =>
+  new Promise((portResolve) => {
+    const portedKeys = (Object.keys(services) as ServiceKey[]).filter((k) => services[k].defaultPort !== null);
+
+    const interval = setInterval(() => {
+      const allDetected = portedKeys.every((k) => detectedPorts[k] !== null);
+      if (allDetected) {
+        clearInterval(interval);
+        portResolve();
+      }
+    }, 100);
+
+    setTimeout(() => {
+      clearInterval(interval);
+      portResolve();
+    }, 10_000);
+  });
+
+await waitForPorts();
+
+console.log();
+
+if (crashedServices.length > 0) {
+  console.log(colors.bold(colors.red("✖ Some services failed to start")));
   console.log();
 
-  if (crashedServices.length > 0) {
-    console.log(colors.bold(colors.red("✖ Some services failed to start")));
+  for (const crashed of crashedServices) {
+    const config = services[crashed.service];
+    const label = colors.bold(config.color(`[${config.emoji} ${config.name}]`));
+    console.log(`${label} ${colors.red(`Exited with code ${String(crashed.exitCode)}`)}`);
     console.log();
+  }
 
-    for (const crashed of crashedServices) {
-      const config = services[crashed.service];
-      const label = colors.bold(config.color(`[${config.emoji} ${config.name}]`));
-      console.log(`${label} ${colors.red(`Exited with code ${String(crashed.exitCode)}`)}`);
-      if (crashed.stderr.trim()) {
-        for (const line of crashed.stderr.trim().split("\n")) {
-          console.log(`${label} ${colors.red(line)}`);
-        }
-      }
-      console.log();
+  const crashedKeys = new Set(crashedServices.map((c) => c.service));
+  const runningEntries = (Object.entries(services) as [ServiceKey, ServiceConfig][]).filter(
+    ([k]) => !crashedKeys.has(k),
+  );
+
+  if (runningEntries.length > 0) {
+    console.log(colors.bold("Services still running:"));
+    for (const [k, config] of runningEntries) {
+      const port = resolvePort(k);
+      const portInfo = port !== null ? `→ http://localhost:${String(port)}` : "→ Watching for changes";
+      console.log(`  ${config.emoji} ${colors.bold(config.color(config.name))}  ${portInfo}`);
     }
-
-    const crashedNames = new Set(crashedServices.map((c) => c.service));
-    const running = Object.entries(services).filter(([key]) => !crashedNames.has(key));
-
-    if (running.length > 0) {
-      console.log(colors.bold("Services still running:"));
-      for (const [, config] of running) {
-        const portInfo = config.port ? `→ http://localhost:${config.port}` : "→ Watching for changes";
-        console.log(`  ${config.emoji} ${colors.bold(config.color(config.name))}  ${portInfo}`);
-      }
-      console.log();
-      console.log(colors.gray("Press Ctrl+C to stop all services"));
-      console.log();
-    }
-  } else {
-    console.log(colors.bold(colors.green("✓ All services started!")));
-    console.log();
-    console.log(colors.bold("Services running:"));
-    console.log(
-      `  ${services.frontend.emoji}  ${colors.bold(colors.cyan("Frontend"))}  → http://localhost:${services.frontend.port}`,
-    );
-    console.log(
-      `  ${services.backend.emoji} ${colors.bold(colors.green("Backend"))}  → http://localhost:${services.backend.port}`,
-    );
-    console.log(`  ${services.lib.emoji} ${colors.bold(colors.yellow("Lib"))}      → Watching for changes`);
     console.log();
     console.log(colors.gray("Press Ctrl+C to stop all services"));
     console.log();
   }
-}, 2000);
+} else {
+  console.log(colors.bold(colors.green("✓ All services started!")));
+  console.log();
+  console.log(colors.bold("Services running:"));
+  console.log(
+    `  ${services.frontend.emoji}  ${colors.bold(colors.cyan("Frontend"))}  → http://localhost:${String(resolvePort("frontend"))}`,
+  );
+  console.log(
+    `  ${services.backend.emoji} ${colors.bold(colors.green("Backend"))}  → http://localhost:${String(resolvePort("backend"))}`,
+  );
+  console.log(`  ${services.lib.emoji} ${colors.bold(colors.yellow("Lib"))}      → Watching for changes`);
+  console.log();
+  console.log(colors.gray("Press Ctrl+C to stop all services"));
+  console.log();
+}
 
 process.on("SIGINT", () => {
   console.log();

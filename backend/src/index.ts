@@ -10,9 +10,17 @@ import { Hono } from "hono";
 import { authHandler, initAuthConfig, verifyAuth } from "@hono/auth-js";
 import { rateLimit } from "./security/rateLimit";
 import { secureHeaders } from "hono/secure-headers";
+import { tryCatchAsync } from "@vex-app/lib";
 import { users } from "./db/schema/users";
 
 const app = new Hono<{ Variables: { db: typeof db } }>();
+
+const resolveOrigin = (origin: string): string | null => {
+  if (env.ENVIRONMENT !== "development") {
+    return origin === env.FRONTEND_URL ? origin : null;
+  }
+  return /^https?:\/\/localhost(:\d+)?$/.test(origin) ? origin : null;
+};
 
 app.use(
   "*",
@@ -20,7 +28,7 @@ app.use(
     allowHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
-    origin: env.FRONTEND_URL,
+    origin: resolveOrigin,
   }),
 );
 
@@ -91,7 +99,38 @@ app.get("/", (c) => {
   return c.json({ message: "Hello from Hono!" });
 });
 
+const isPortTaken = async (port: number): Promise<boolean> => {
+  const [socket] = await tryCatchAsync(() =>
+    Bun.connect({
+      hostname: "localhost",
+      port,
+      socket: {
+        close: () => {},
+        data: () => {},
+        error: () => {},
+        open: (s) => {
+          s.end();
+        },
+      },
+    }),
+  );
+  return socket !== null;
+};
+
+const findFreePort = async (port: number): Promise<number> => {
+  const taken = await isPortTaken(port);
+  return taken ? findFreePort(port + 1) : port;
+};
+
+const port = await findFreePort(env.PORT);
+
+if (port !== env.PORT) {
+  process.stdout.write(`Port ${String(env.PORT)} is in use, using port ${String(port)}\n`);
+}
+
+process.stdout.write(`Listening on port ${String(port)}\n`);
+
 export default {
   fetch: app.fetch,
-  port: env.PORT,
+  port,
 };
