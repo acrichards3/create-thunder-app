@@ -12,7 +12,7 @@ body:
     attributes:
       label: Which page or section?
       description: Link to the page or describe the section (e.g. "Testing / Spec-First Workflow").
-      placeholder: "https://vexapp.io/docs/... or 'AI Integration > Hooks'"
+      placeholder: "https://vexapp.io/introduction/... or 'AI Integration > Hooks'"
     validations:
       required: true
 
