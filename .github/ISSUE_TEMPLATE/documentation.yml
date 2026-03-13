@@ -1,0 +1,44 @@
+name: Documentation Improvement
+description: Something in the docs is missing, wrong, or unclear
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Help us make the docs better. Point us to what's wrong or missing.
+
+  - type: input
+    id: page
+    attributes:
+      label: Which page or section?
+      description: Link to the page or describe the section (e.g. "Testing / Spec-First Workflow").
+      placeholder: "https://vexapp.io/docs/... or 'AI Integration > Hooks'"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type of issue
+      options:
+        - Incorrect or outdated information
+        - Missing information
+        - Confusing or unclear explanation
+        - Broken link or formatting
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What's wrong or missing?
+      description: Be as specific as possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested improvement
+      description: How should it read? A draft is even better.

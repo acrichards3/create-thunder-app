@@ -1,0 +1,28 @@
+name: Question / Support
+description: Not sure how something works? Ask here.
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening a question, check the [docs](https://vexapp.io/docs) — the answer might already be there.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: What do you want to know?
+      description: Be as specific as you can. Include relevant code snippets or config if helpful.
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you already tried?
+      description: What did you look at or attempt before opening this issue?
+
+  - type: input
+    id: version
+    attributes:
+      label: create-vex-app version
+      placeholder: "e.g. 1.1.0"
