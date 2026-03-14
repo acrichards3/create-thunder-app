@@ -9,6 +9,8 @@ const SPEC_FIRST_TEMPLATE = resolve(import.meta.dir, "../templates/cursor/spec-f
 const SPEC_CHECK_TEMPLATE = resolve(import.meta.dir, "../templates/cursor/spec-check.sh");
 const SPEC_MARKER_TEMPLATE = resolve(import.meta.dir, "../templates/cursor/spec-marker.sh");
 const SPEC_DELETE_GUARD_TEMPLATE = resolve(import.meta.dir, "../templates/cursor/spec-delete-guard.sh");
+const SPEC_LINT_TEMPLATE = resolve(import.meta.dir, "../templates/cursor/spec-lint.sh");
+const ESLINT_GUARD_TEMPLATE = resolve(import.meta.dir, "../templates/cursor/eslint-guard.sh");
 
 interface HookEntry {
   command: string;
@@ -75,6 +77,9 @@ const applySpecCheck = async (config: ProjectConfig): Promise<void> => {
   const deleteGuardDest = resolve(config.targetDir, ".cursor", "hooks", "spec-delete-guard.sh");
   await Bun.write(deleteGuardDest, Bun.file(SPEC_DELETE_GUARD_TEMPLATE));
 
+  const eslintGuardDest = resolve(config.targetDir, ".cursor", "hooks", "eslint-guard.sh");
+  await Bun.write(eslintGuardDest, Bun.file(ESLINT_GUARD_TEMPLATE));
+
   await Bun.write(resolve(config.targetDir, ".spec-pending"), "");
 
   const hooksJsonPath = resolve(config.targetDir, ".cursor", "hooks.json");
@@ -86,7 +91,9 @@ const applySpecCheck = async (config: ProjectConfig): Promise<void> => {
 
   parsed.hooks.preToolUse = [
     ...(parsed.hooks.preToolUse ?? []),
+    { command: ".cursor/hooks/eslint-guard.sh", matcher: "Write" },
     { command: ".cursor/hooks/spec-check.sh", matcher: "Write" },
+    { command: ".cursor/hooks/spec-lint.sh", matcher: "Write" },
     { command: ".cursor/hooks/spec-delete-guard.sh", matcher: "Delete" },
   ];
 

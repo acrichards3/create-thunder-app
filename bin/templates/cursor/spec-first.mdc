@@ -7,15 +7,19 @@ alwaysApply: true
 
 **This rule is NON-NEGOTIABLE. You MUST follow this workflow for EVERY task that involves building, creating, implementing, or adding any feature, endpoint, module, or function.**
 
-NEVER write implementation code first. ALWAYS write the test specs first and STOP.
+NEVER write implementation code first. ALWAYS write `.spec.ts` test files first and STOP.
 
-### Step 1 — Write ONLY the specs
+### Step 1 — Write ONLY `.spec.ts` test files
 
 Create `.spec.ts` files for EVERY layer of the feature. Each layer gets its own spec file. Write the full WHEN/AND/it decision tree using `it.todo()` for every leaf. Map every code path in every layer.
 
-Use `it.todo("description")` — NOT `it("description", () => {})`. The `it.todo` form is the correct placeholder: it documents intent without an empty body, and ESLint will not flag it. Empty `it` bodies are banned.
+**"Spec" means a TypeScript test file (`.spec.ts`), NOT a markdown document, NOT a planning file, NOT a `SPEC.md`.** The only files you create in this step are `.spec.ts` files co-located next to where the implementation will live.
 
-DO NOT create any other files. DO NOT write controllers, actions, services, schemas, or any implementation code. The ONLY files you create in this step are the `.spec.ts` files.
+Use `it.todo("description", () => {})` — the empty callback is required to satisfy TypeScript. ESLint will not flag empty bodies on `it.todo` calls. Do NOT use `it("description", () => {})` (plain `it` with an empty body is banned by ESLint).
+
+**Each `describe` block may contain ONLY ONE `it.todo`. If a condition has multiple outcomes, nest additional `describe("AND ...")` blocks — one per outcome — each with its own single `it.todo`. ESLint will error if you put more than one `it.todo` in a single `describe`.**
+
+DO NOT create any other files. DO NOT write controllers, actions, services, schemas, markdown documents, or any implementation code. The ONLY files you create in this step are `.spec.ts` files.
 
 Example for a "users" feature — you create ALL THREE:
 
@@ -24,11 +28,11 @@ Example for a "users" feature — you create ALL THREE:
 ```typescript
 describe("POST /users", () => {
   describe("WHEN the request body is missing", () => {
-    it.todo("returns a 400");
+    it.todo("returns a 400", () => {});
   });
 
   describe("WHEN the request body is valid", () => {
-    it.todo("returns a 201 with the created user");
+    it.todo("returns a 201 with the created user", () => {});
   });
 });
 ```
@@ -38,11 +42,11 @@ describe("POST /users", () => {
 ```typescript
 describe("createUser", () => {
   describe("WHEN a user with that email already exists", () => {
-    it.todo("throws a duplicate email error");
+    it.todo("throws a duplicate email error", () => {});
   });
 
   describe("WHEN the email is available", () => {
-    it.todo("returns the created user");
+    it.todo("returns the created user", () => {});
   });
 });
 ```
@@ -52,7 +56,27 @@ describe("createUser", () => {
 ```typescript
 describe("insertUser", () => {
   describe("WHEN given valid user data", () => {
-    it.todo("inserts the user into the database");
+    it.todo("inserts the user into the database", () => {});
+  });
+});
+```
+
+**WRONG — multiple `it.todo` in one `describe`:**
+```typescript
+describe("WHEN the user is authenticated", () => {
+  it.todo("creates a team", () => {});    // ❌
+  it.todo("returns the team", () => {});  // ❌ ESLint error
+});
+```
+
+**CORRECT — nest an `AND` describe for each outcome:**
+```typescript
+describe("WHEN the user is authenticated", () => {
+  describe("AND the operation succeeds", () => {
+    it.todo("creates a team", () => {});   // ✅
+  });
+  describe("AND the response is returned", () => {
+    it.todo("returns the team", () => {}); // ✅
   });
 });
 ```
@@ -77,5 +101,7 @@ Only after the user has sent an explicit approval message:
 
 1. Clear the approval gate by writing an empty string to `.spec-pending` at the repo root
 2. Create the implementation files (controller, actions, service, schema)
-3. Replace every `it.todo("description")` with a real `it("description", () => { expect(...) })` containing actual assertions
+3. Replace every `it.todo("description", () => {})` with a real `it("description", () => { expect(...) })` containing actual assertions
 4. Run `bun test` and ensure all tests pass
+
+**Step 3 is NOT complete until every single `it.todo` has been replaced with a real assertion.** Do not stop, do not summarize, do not ask a follow-up question while any `it.todo` remains in a spec file whose implementation exists. A stop hook will detect unfilled todos and force you back to finish them.

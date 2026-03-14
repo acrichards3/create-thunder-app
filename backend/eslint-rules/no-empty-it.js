@@ -14,7 +14,7 @@ const noEmptyIt = {
   },
 
   create(context) {
-    const isItCall = (node) =>
+    const isPlainItCall = (node) =>
       node.type === "CallExpression" &&
       node.callee.type === "Identifier" &&
       (node.callee.name === "it" || node.callee.name === "test");
@@ -30,14 +30,17 @@ const noEmptyIt = {
 
     const hasExpectCall = (node) => {
       let found = false;
+      const seen = new Set();
 
       const visit = (n) => {
-        if (!n || typeof n !== "object" || found) return;
+        if (!n || typeof n !== "object" || found || seen.has(n)) return;
+        seen.add(n);
         if (n.type === "CallExpression" && n.callee.type === "Identifier" && n.callee.name === "expect") {
           found = true;
           return;
         }
-        Object.values(n).forEach((child) => {
+        Object.entries(n).forEach(([key, child]) => {
+          if (key === "parent") return;
           if (Array.isArray(child)) {
             child.forEach(visit);
           } else if (child && typeof child === "object" && child.type) {
@@ -53,7 +56,7 @@ const noEmptyIt = {
     return {
       ExpressionStatement(node) {
         const expr = node.expression;
-        if (!isItCall(expr)) return;
+        if (!isPlainItCall(expr)) return;
 
         const body = getCallbackBody(expr);
         if (!body) return;

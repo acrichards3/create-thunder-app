@@ -33,29 +33,51 @@ Use `describe` / `it` (not `test`). Structure tests as a decision tree that mirr
 1. **Top-level `describe`** — the function or endpoint being tested
 2. **`describe("WHEN ...")`** — a condition or input scenario
 3. **`describe("AND ...")`** — a deeper branch when paths diverge further
-4. **`it.todo("does X")`** — the leaf placeholder during the spec phase (before user approval)
+4. **`it.todo("does X", () => {})`** — the leaf placeholder during the spec phase (before user approval)
 5. **`it("does X", () => { expect(...) })`** — the real assertion, written after user approval
+
+**Each `describe` block may contain ONLY ONE `it` or `it.todo`.** If you need to assert multiple things about the same condition, nest deeper `describe("AND ...")` blocks — each ending in a single `it`. ESLint enforces this — multiple `it` calls in a single `describe` will error.
+
+**Wrong:**
+```typescript
+describe("WHEN the user is authenticated", () => {
+  it.todo("creates a team", () => {});
+  it.todo("returns the new team", () => {});  // ❌ second it in same describe
+});
+```
+
+**Correct:**
+```typescript
+describe("WHEN the user is authenticated", () => {
+  describe("AND the team name is valid", () => {
+    it.todo("creates a team", () => {});       // ✅ one it per describe
+  });
+  describe("AND the response is checked", () => {
+    it.todo("returns the new team", () => {}); // ✅ one it per describe
+  });
+});
+```
 
 Continue nesting `AND` blocks until all code paths are covered.
 
 ```typescript
 describe("/verify", () => {
   describe("WHEN there is no body", () => {
-    it.todo("throws a 400");
+    it.todo("throws a 400", () => {});
   });
 
   describe("WHEN there is a body", () => {
     describe("AND the body does NOT contain a code AND pin", () => {
-      it.todo("throws a 400");
+      it.todo("throws a 400", () => {});
     });
 
     describe("AND it DOES contain a code and pin", () => {
       describe("AND the code or pin is INVALID", () => {
-        it.todo("throws a 401");
+        it.todo("throws a 401", () => {});
       });
 
       describe("AND the code and pin are both VALID", () => {
-        it.todo("returns a 200 with the assignedTo");
+        it.todo("returns a 200 with the assignedTo", () => {});
       });
     });
   });
