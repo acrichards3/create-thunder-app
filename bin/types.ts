@@ -3,7 +3,6 @@ export interface ProjectConfig {
   targetDir: string;
   includeDeploy: boolean;
   includeGithub: boolean;
-  includeAiSettings: boolean;
   includeSpecFirst: boolean;
 }
 

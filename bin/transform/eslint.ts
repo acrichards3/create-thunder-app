@@ -98,10 +98,6 @@ async function injectDeps(targetDir: string, workspace: string): Promise<void> {
 }
 
 export async function applyStrictEslint(config: ProjectConfig): Promise<void> {
-  if (!config.includeAiSettings) {
-    return;
-  }
-
   const tasks = WORKSPACE_CONFIGS.map(async ({ eslintTemplate, workspace }) => {
     await overwriteEslintConfig(config.targetDir, workspace, eslintTemplate);
     await injectDeps(config.targetDir, workspace);
