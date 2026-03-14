@@ -52,56 +52,56 @@ The AI settings also include testing rules that enforce a structured **WHEN / AN
 
 If you enable the spec-first workflow during setup ("Use AI spec-first workflow?"), the AI agent follows a strict three-step process for every new feature:
 
-1. **Write the specs** — Creates `.spec.ts` files for every logical layer (controller, actions, service) with empty `it` blocks mapping all code paths using the WHEN/AND/it structure. No implementation code is written.
+1. **Write the specs** — Creates `.spec.ts` files for every logical layer (controller, actions, service) with `it.todo()` blocks mapping all code paths using the WHEN/AND/it structure. No implementation code is written.
 2. **Stop and ask** — Presents the test structure and asks you to approve, modify, or add paths before proceeding.
-3. **Implement** — Only after you approve does the AI create the implementation files, fill in the test assertions, and run `bun test` to verify everything passes.
+3. **Implement** — Only after you approve does the AI create the implementation files, replace the `it.todo()` blocks with real assertions, and run `bun test` to verify everything passes.
 
 This workflow is enforced mechanically through two hooks and a `.spec-pending` marker file — not just through rules. See the [Testing](/testing) page for how it works in detail.
 
-## Post-Write Hooks
+## Hooks
 
-The post-write hooks are the per-file enforcement layer. Every time the AI agent writes a file, four scripts run in sequence:
+The hooks are the enforcement layer. Two types of hooks run at different points in the AI's workflow.
 
-### 1. Prettier (`prettier.sh`)
+### Pre-Write Hooks (`preToolUse`)
 
-Formats the file with Prettier. Always allows the write — formatting is auto-fixed, not blocked.
+These run before every file write and can block it entirely:
 
-### 2. ESLint (`eslint.sh`)
+- **`spec-check.sh`** — If a `.spec-pending` file has content, blocks any implementation write. Also blocks writing markdown files as fake "specs" and enforces that a co-located `.spec.ts` file exists before any logical file (controller, actions, service) can be written.
+- **`spec-lint.sh`** — Parses incoming spec file content and blocks the write if it contains multiple `it` or `it.todo` calls within a single `describe` block. Enforces one `it` per `describe` before the file is even saved.
+- **`spec-marker.sh`** — After a `.spec.ts` file is written, appends the path to `.spec-pending` to signal that specs are awaiting approval.
+- **`eslint-guard.sh`** — Blocks any write to ESLint config files or custom rule files without explicit user permission.
+- **`tsconfig-guard.sh`** — Blocks any write or delete targeting `tsconfig*.json` files.
+- **`spec-delete-guard.sh`** — Requires user confirmation before the AI is allowed to delete a `.spec.ts` file.
 
-Runs two passes:
+### Stop Hook (`eslint-stop.sh`)
 
-- **Pass 1**: Auto-fixes what it can (`--fix`)
-- **Pass 2**: Reports remaining errors
+Runs at the end of every agent turn before the AI responds. It performs five sequential checks:
 
-If errors remain after auto-fix, the hook blocks the write and returns the errors to the AI agent so it can correct them.
-
-### 3. TypeScript (`typecheck.sh`)
-
-Runs `tsc --noEmit` against the relevant `tsconfig.json` and filters output to the specific file that was written. Blocks the write if type errors are found.
-
-### 4. Duplicate Detection (`jscpd.sh`)
-
-Runs `jscpd` to check if the written file contains duplicated code. Blocks the write if clones are found. Thresholds are configured in `.jscpd.json` at the project root.
+1. **ESLint** — Scans all workspaces for lint errors. If any are found, injects a follow-up message forcing the AI to fix them before considering the task done.
+2. **TypeScript** — Runs `bun tsc -b` at the repo root. Blocks completion if type errors are present.
+3. **Prettier** — Checks formatting across all files. Forces a `prettier --write` pass if any file is out of spec.
+4. **Failing tests** — Runs `bun test` in any workspace that has spec files. Forces fixes if any tests are failing.
+5. **Unfilled `it.todo()`** — Scans spec files whose implementation counterpart exists. If any `it.todo()` remain, forces the AI to replace them with real assertions before finishing.
 
 ### How Blocking Works
 
-Each hook outputs a JSON response:
+Pre-write hooks return a JSON response:
 
 ```json
-{ "decision": "allow" }
+{ "permission": "allow" }
 ```
 
 or
 
 ```json
-{ "decision": "deny", "reason": "error details here" }
+{ "permission": "deny", "agent_message": "...", "user_message": "..." }
 ```
 
-When a hook returns `deny`, Cursor blocks the file write and feeds the error back to the AI agent, giving it a chance to fix the issue in its next attempt.
+When a hook returns `deny`, Cursor blocks the file write and feeds the error back to the AI agent. The stop hook injects a `followup_message` which re-queues the AI to fix the issue without requiring user input.
 
 ### Prerequisites
 
-The hooks require `jq` to be installed on your system for JSON processing. Most macOS and Linux systems have it pre-installed. If not:
+The hooks require `jq` to be installed for JSON processing:
 
 ```bash
 # macOS

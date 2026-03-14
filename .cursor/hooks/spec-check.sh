@@ -9,7 +9,12 @@ FILE=$(echo "$INPUT" | jq -r '.tool_input.file_path')
 [[ "$FILE" == */node_modules/* ]] && { echo '{"permission": "allow"}'; exit 0; }
 
 # Block ALL markdown files anywhere in the project — specs are .spec.ts files, not markdown documents
+# Exception: docs/ directory is a documentation site, not a feature implementation
 if [[ "$FILE" == *.md ]]; then
+  if [[ "$FILE" == */docs/* ]]; then
+    echo '{"permission": "allow"}'
+    exit 0
+  fi
   AGENT_MSG="You are trying to write a markdown file. This is not allowed when following the spec-first workflow. \"Spec\" means a TypeScript test file (.spec.ts), NOT a markdown planning document. Do not create API_SPECIFICATION.md, SPEC.md, or any other .md file as part of a feature. Follow spec-first.mdc: create .spec.ts files with WHEN/AND/it.todo() branches co-located next to the implementation files, then stop and wait for user approval."
   USER_MSG="Markdown files are not allowed as specs. Use co-located .spec.ts test files instead."
   echo "{\"permission\": \"deny\", \"agent_message\": $(echo "$AGENT_MSG" | jq -Rs .), \"user_message\": $(echo "$USER_MSG" | jq -Rs .)}"

@@ -81,23 +81,29 @@ import { describe, it, expect, beforeEach } from "bun:test";
 
 describe("applyDiscount", () => {
   describe("WHEN the discount code does not exist", () => {
-    it("throws an invalid discount code error", () => {});
+    it("throws an invalid discount code error", () => {
+      expect(() => applyDiscount(order, "INVALID")).toThrow("Invalid discount code");
+    });
   });
 
   describe("WHEN the discount code exists", () => {
     describe("AND the code has expired", () => {
-      it("throws a discount expired error", () => {});
+      it("throws a discount expired error", () => {
+        expect(() => applyDiscount(order, "EXPIRED")).toThrow("Discount code has expired");
+      });
     });
 
     describe("AND the code has not expired", () => {
       describe("AND the order total is below the minimum spend", () => {
-        it("throws a minimum spend error", () => {});
+        it("throws a minimum spend error", () => {
+          expect(() => applyDiscount(smallOrder, "VALID")).toThrow("Order does not meet minimum spend");
+        });
       });
 
       describe("AND the order total meets the minimum spend", () => {
-        it("returns the order with the discount applied", () => {});
-
-        it("reduces the total by the discount amount", () => {});
+        it("returns the order with the discount applied", () => {
+          expect(applyDiscount(order, "VALID")).toMatchObject({ discount: 10 });
+        });
       });
     });
   });
@@ -140,9 +146,9 @@ Do not mock your own code just to make tests pass. If you can run it, run it for
 
 If you opted into the spec-first workflow during setup, the AI agent is required to follow a three-step process for every new feature:
 
-1. **Write the specs** — Creates `.spec.ts` files for every logical layer (controller, actions, service) with empty `it` blocks mapping all code paths in the WHEN/AND/it structure. No implementation code is written.
+1. **Write the specs** — Creates `.spec.ts` files for every logical layer (controller, actions, service) with `it.todo()` blocks mapping all code paths in the WHEN/AND/it structure. No implementation code is written.
 2. **Stop and ask** — Presents the test structure and waits for you to approve, modify, or add paths before continuing.
-3. **Implement** — Only after you explicitly approve does the AI write the implementation files, fill in the test bodies, and run `bun test`.
+3. **Implement** — Only after you explicitly approve does the AI write the implementation files, replace the `it.todo()` blocks with real assertions, and run `bun test`.
 
 This gives you control over what gets built. You define the behavior through test paths, and the AI builds to match.
 
