@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 import { resolve } from "path";
-import type { Subprocess } from "bun";
 
 const colors = {
   bold: (s: string) => `\x1b[1m${s}\x1b[0m`,
@@ -27,6 +26,7 @@ interface ServiceConfig {
   emoji: string;
   name: string;
   portPattern: RegExp | null;
+  restart: boolean;
 }
 
 interface CrashedService {
@@ -41,6 +41,7 @@ const services = {
     emoji: "🚀",
     name: "Backend",
     portPattern: BUNO_PORT_RE,
+    restart: true,
   },
   frontend: {
     color: colors.cyan,
@@ -48,6 +49,7 @@ const services = {
     emoji: "⚛️",
     name: "Frontend",
     portPattern: VITE_PORT_RE,
+    restart: false,
   },
   lib: {
     color: colors.yellow,
@@ -55,12 +57,14 @@ const services = {
     emoji: "📦",
     name: "Lib",
     portPattern: null,
+    restart: false,
   },
 } as const satisfies Record<string, ServiceConfig>;
 
 type ServiceKey = keyof typeof services;
 
-const isServiceKey = (key: string): key is ServiceKey => key in services;
+let shuttingDown = false;
+const activeProcs = new Map<ServiceKey, ReturnType<typeof Bun.spawn>>();
 
 const detectedPorts: Record<ServiceKey, number | null> = {
   backend: null,
@@ -70,7 +74,7 @@ const detectedPorts: Record<ServiceKey, number | null> = {
 
 const crashedServices: CrashedService[] = [];
 
-const spawnWithLabel = (key: ServiceKey, command: string[], cwd: string): Subprocess => {
+const spawnWithLabel = (key: ServiceKey, command: string[], cwd: string): ReturnType<typeof Bun.spawn> => {
   const config = services[key];
   const label = colors.bold(config.color(`[${config.emoji} ${config.name}]`));
 
@@ -82,6 +86,8 @@ const spawnWithLabel = (key: ServiceKey, command: string[], cwd: string): Subpro
     stdout: "pipe",
     stderr: "pipe",
   });
+
+  activeProcs.set(key, proc);
 
   const scanStream = async (stream: ReadableStream<Uint8Array>, isStdout: boolean): Promise<void> => {
     const reader = stream.getReader();
@@ -132,9 +138,15 @@ const spawnWithLabel = (key: ServiceKey, command: string[], cwd: string): Subpro
   scanStream(proc.stdout, true).catch(() => {});
   scanStream(proc.stderr, false).catch(() => {});
 
-  proc.exited.then((exitCode) => {
+  void proc.exited.then(async (exitCode): Promise<void> => {
+    if (shuttingDown) return;
     if (exitCode !== 0) {
       crashedServices.push({ exitCode, service: key });
+      if (config.restart) {
+        console.log(`${label} ${colors.yellow(`Exited with code ${String(exitCode)} — restarting in 1s...`)}`);
+        await Bun.sleep(1000);
+        if (!shuttingDown) spawnWithLabel(key, command, cwd);
+      }
     }
   });
 
@@ -147,9 +159,9 @@ console.log(colors.bold(colors.blue("║   Starting Development Servers         
 console.log(colors.bold(colors.blue("╚════════════════════════════════════════╝")));
 console.log();
 
-const libProc = spawnWithLabel("lib", ["bun", "run", "dev"], resolve(rootDir, "lib"));
-const backendProc = spawnWithLabel("backend", ["bun", "run", "dev"], resolve(rootDir, "backend"));
-const frontendProc = spawnWithLabel("frontend", ["bun", "run", "dev"], resolve(rootDir, "frontend"));
+spawnWithLabel("lib", ["bun", "run", "dev"], resolve(rootDir, "lib"));
+spawnWithLabel("backend", ["bun", "run", "dev"], resolve(rootDir, "backend"));
+spawnWithLabel("frontend", ["bun", "run", "dev"], resolve(rootDir, "frontend"));
 
 const resolvePort = (key: ServiceKey): number | null => detectedPorts[key] ?? services[key].defaultPort;
 
@@ -219,17 +231,19 @@ if (crashedServices.length > 0) {
 }
 
 process.on("SIGINT", () => {
+  shuttingDown = true;
   console.log();
   console.log(colors.yellow("Stopping all services..."));
-  libProc.kill();
-  backendProc.kill();
-  frontendProc.kill();
+  for (const proc of activeProcs.values()) {
+    proc.kill();
+  }
   process.exit(0);
 });
 
 process.on("SIGTERM", () => {
-  libProc.kill();
-  backendProc.kill();
-  frontendProc.kill();
+  shuttingDown = true;
+  for (const proc of activeProcs.values()) {
+    proc.kill();
+  }
   process.exit(0);
 });

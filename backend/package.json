@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "bun --watch src/index.ts",
+    "dev": "bun --hot src/index.ts",
     "build": "tsc",
     "start": "bun run dist/index.js",
     "test": "bun test --passWithNoTests",

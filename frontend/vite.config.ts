@@ -36,7 +36,7 @@ export default defineConfig(({ mode }) => {
         },
       },
       watch: {
-        ignored: ["**/routeTree.gen.ts"],
+        ignored: ["**/routeTree.gen.ts", "**/*.tsbuildinfo"],
       },
     },
   };

@@ -83,6 +83,12 @@ if [ -n "$RECENTLY_MODIFIED" ]; then
 fi
 
 # Check 5: Unfilled it.todo() in spec files whose implementation exists
+# Skip if specs are pending approval (spec-first workflow step 2)
+SPEC_PENDING_FILE="$REPO_ROOT/.spec-pending"
+if [ -f "$SPEC_PENDING_FILE" ] && [ -s "$SPEC_PENDING_FILE" ]; then
+  exit 0
+fi
+
 PENDING_TODOS=""
 for WS in "${WORKSPACES[@]}"; do
   while IFS= read -r -d '' SPEC_FILE; do
