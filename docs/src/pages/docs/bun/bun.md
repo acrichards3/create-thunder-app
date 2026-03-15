@@ -99,7 +99,7 @@ export default {
 };
 ```
 
-In development, `bun --watch src/index.ts` restarts the server on file changes. In production, `bun run dist/index.js` runs the compiled output.
+In development, `bun --hot src/index.ts` hot-reloads changed modules in-place without restarting the process — the TCP port stays open the entire time. In production, `bun run dist/index.js` runs the compiled output.
 
 ## Bun vs Node.js
 
@@ -113,7 +113,7 @@ Bun runs `.ts` files without a separate compile step. The dev script, backend se
 
 ```bash
 bun scripts/dev.ts
-bun --watch src/index.ts
+bun --hot src/index.ts
 ```
 
 ### Bun SQL

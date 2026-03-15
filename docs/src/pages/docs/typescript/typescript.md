@@ -71,6 +71,17 @@ The backend config adds Bun types and emits compiled JavaScript:
 }
 ```
 
+The backend also has a `tsconfig.build.json` that extends `tsconfig.json` and excludes `*.spec.ts` files from the compiled output:
+
+```json
+{
+  "extends": "./tsconfig.json",
+  "exclude": ["**/*.spec.ts"]
+}
+```
+
+The `build` and `typecheck` scripts use `tsconfig.build.json` to keep test files out of `dist/`. The main `tsconfig.json` intentionally includes spec files so the IDE resolves `~/` path aliases inside them correctly.
+
 ### Lib
 
 The lib config emits declarations and source maps so both frontend and backend get full type information:

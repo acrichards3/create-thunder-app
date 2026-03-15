@@ -16,7 +16,7 @@ The strict config builds on top of `@typescript-eslint/recommended-type-checked`
 
 | Category           | What it enforces                                                                                                                                                                           |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Complexity**     | Max 7 cyclomatic complexity, max 10 cognitive complexity, max 60 lines per function, max 200 lines per file, max 2 parameters                                                              |
+| **Complexity**     | Max 7 cyclomatic complexity, max 10 cognitive complexity, max 2 parameters. Frontend also enforces max 60 lines per function, max 200 lines per file.                                      |
 | **Immutability**   | No `.push()`, `.pop()`, `.sort()`, `.reverse()`, `.splice()`, `.fill()`. No object mutation via property assignment. Use spread and immutable alternatives.                                |
 | **Type safety**    | No `any`, no type assertions (`as`), no `@ts-ignore`. Explicit return types on all functions. Strict boolean expressions. All `no-unsafe-*` rules enabled.                                 |
 | **Code style**     | Arrow functions only (`func-style`), no `for...in` or `for...of` loops, no `console.log`, no optional properties (`prop?: T` — use `prop: T \| undefined`), no `=== undefined` comparisons |

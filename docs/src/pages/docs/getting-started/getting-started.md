@@ -72,7 +72,7 @@ This will start:
 - Lib (watches for file changes)
 - Backend API server (defaults to `http://localhost:3000`)
 
-The frontend and lib support hot module replacement, so your changes will be reflected immediately. The backend uses Bun's `--watch` mode to automatically restart on file changes.
+The frontend and lib support hot module replacement, so your changes will be reflected immediately. The backend uses Bun's `--hot` mode to hot-reload changed modules in-place without restarting the process, so the server stays responsive during development.
 
 ## Next Steps
 
