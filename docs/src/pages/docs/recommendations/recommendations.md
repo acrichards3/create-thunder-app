@@ -128,12 +128,10 @@ import { tryCatchAsync } from "@vex-app/lib";
 const [user, error] = await tryCatchAsync(() => getUser(id));
 
 if (error) {
-  console.error("Failed to fetch user:", error.message);
-  return;
+  return new Response("Failed to fetch user", { status: 500 });
 }
 
-// user is guaranteed to be non-null here
-console.log(user.name);
+return user;
 ```
 
 ## Run the Full Build Before Pushing
