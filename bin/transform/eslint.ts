@@ -30,52 +30,53 @@ const RULE_FILES = [
   "no-todo-without-description.js",
 ] as const satisfies readonly string[];
 
-const TEST_SETUP_CONTENT = [
-  'import { drizzle } from "drizzle-orm/bun-sql";',
-  'import { migrate } from "drizzle-orm/bun-sql/migrator";',
-  'import { SQL } from "bun";',
-  'import { raise, tryCatchAsync } from "@<project-name>/lib";',
-  'import { readdirSync } from "fs";',
-  'import { resolve } from "path";',
-  "",
-  "Object.assign(Bun.env, {",
-  '  AUTH_SECRET: "test-secret-for-testing-only",',
-  '  DATABASE_URL: "postgres://postgres:test@localhost:5433/test",',
-  '  GOOGLE_CLIENT_ID: "test-client-id",',
-  '  GOOGLE_CLIENT_SECRET: "test-client-secret",',
-  "});",
-  "",
-  'const migrationsFolder = resolve(import.meta.dir, "db/migrations");',
-  'const migrationFiles = readdirSync(migrationsFolder).filter((f) => f.endsWith(".sql"));',
-  "",
-  "if (migrationFiles.length === 0) {",
-  "  process.stderr.write(",
-  '    "\\n[test-setup] No migration files found in backend/src/db/migrations/\\n" +',
-  '      "Run `bun run db:generate` first to generate the initial migration, then re-run tests.\\n\\n",',
-  "  );",
-  "  process.exit(1);",
-  "}",
-  "",
-  'const client = new SQL(Bun.env.DATABASE_URL ?? raise("DATABASE_URL not set"));',
-  "",
-  "const [, pingError] = await tryCatchAsync(async (): Promise<void> => {",
-  "  await client`SELECT 1`;",
-  "});",
-  "if (pingError !== null) {",
-  "  process.stderr.write(",
-  '    "\\n[test-setup] Could not connect to the test database.\\n" +',
-  '      "Make sure the Docker test container is running: bun run test:db:up\\n" +',
-  "      `Details: ${pingError.message}\\n\\n`,",
-  "  );",
-  "  process.exit(1);",
-  "}",
-  "",
-  "const db = drizzle({ client });",
-  "",
-  "await migrate(db, { migrationsFolder });",
-  "await client.end();",
-  "",
-].join("\n");
+const makeTestSetupContent = (projectName: string): string =>
+  [
+    'import { drizzle } from "drizzle-orm/bun-sql";',
+    'import { migrate } from "drizzle-orm/bun-sql/migrator";',
+    'import { SQL } from "bun";',
+    `import { raise, tryCatchAsync } from "@${projectName}/lib";`,
+    'import { readdirSync } from "fs";',
+    'import { resolve } from "path";',
+    "",
+    "Object.assign(Bun.env, {",
+    '  AUTH_SECRET: "test-secret-for-testing-only",',
+    '  DATABASE_URL: "postgres://postgres:test@localhost:5433/test",',
+    '  GOOGLE_CLIENT_ID: "test-client-id",',
+    '  GOOGLE_CLIENT_SECRET: "test-client-secret",',
+    "});",
+    "",
+    'const migrationsFolder = resolve(import.meta.dir, "db/migrations");',
+    'const migrationFiles = readdirSync(migrationsFolder).filter((f) => f.endsWith(".sql"));',
+    "",
+    "if (migrationFiles.length === 0) {",
+    "  process.stderr.write(",
+    '    "\\n[test-setup] No migration files found in backend/src/db/migrations/\\n" +',
+    '      "Run `bun run db:generate` first to generate the initial migration, then re-run tests.\\n\\n",',
+    "  );",
+    "  process.exit(1);",
+    "}",
+    "",
+    'const client = new SQL(Bun.env.DATABASE_URL ?? raise("DATABASE_URL not set"));',
+    "",
+    "const [, pingError] = await tryCatchAsync(async (): Promise<void> => {",
+    "  await client`SELECT 1`;",
+    "});",
+    "if (pingError !== null) {",
+    "  process.stderr.write(",
+    '    "\\n[test-setup] Could not connect to the test database.\\n" +',
+    '      "Make sure the Docker test container is running: bun run test:db:up\\n" +',
+    "      `Details: ${pingError.message}\\n\\n`,",
+    "  );",
+    "  process.exit(1);",
+    "}",
+    "",
+    "const db = drizzle({ client });",
+    "",
+    "await migrate(db, { migrationsFolder });",
+    "await client.end();",
+    "",
+  ].join("\n");
 
 const DOCKER_COMPOSE_TEST_CONTENT = [
   "services:",
@@ -98,14 +99,14 @@ const DOCKER_COMPOSE_TEST_CONTENT = [
 const BUNFIG_BACKEND_CONTENT = '[test]\nroot = "src"\npreload = ["./src/test-setup.ts"]\n';
 const BUNFIG_LIB_CONTENT = '[test]\nroot = "src"\n';
 
-const TSCONFIG_ESLINT_CONTENT =
-  JSON.stringify({ extends: "./tsconfig.json", include: ["src/**/*"], exclude: [] }, null, 2) + "\n";
+const TSCONFIG_ESLINT_CONTENT = `{ "extends": "./tsconfig.json", "include": ["src/**/*"], "exclude": [] }
+`;
 
-async function applyTestSetup(targetDir: string): Promise<void> {
+async function applyTestSetup(targetDir: string, projectName: string): Promise<void> {
   await Promise.all([
     Bun.write(resolve(targetDir, "backend", "bunfig.toml"), BUNFIG_BACKEND_CONTENT),
     Bun.write(resolve(targetDir, "lib", "bunfig.toml"), BUNFIG_LIB_CONTENT),
-    Bun.write(resolve(targetDir, "backend", "src", "test-setup.ts"), TEST_SETUP_CONTENT),
+    Bun.write(resolve(targetDir, "backend", "src", "test-setup.ts"), makeTestSetupContent(projectName)),
     Bun.write(resolve(targetDir, "backend", "tsconfig.eslint.json"), TSCONFIG_ESLINT_CONTENT),
     Bun.write(resolve(targetDir, "lib", "tsconfig.eslint.json"), TSCONFIG_ESLINT_CONTENT),
     Bun.write(resolve(targetDir, "docker-compose.test.yml"), DOCKER_COMPOSE_TEST_CONTENT),
@@ -165,7 +166,7 @@ export async function applyStrictEslint(config: ProjectConfig): Promise<void> {
 
   await Promise.all(tasks);
 
-  await applyTestSetup(config.targetDir);
+  await applyTestSetup(config.targetDir, config.name);
 
   const rootPkgPath = resolve(config.targetDir, "package.json");
   const rootPkgFile = Bun.file(rootPkgPath);
