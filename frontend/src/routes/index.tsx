@@ -2,7 +2,6 @@ import React from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AuthSection } from "../components/AuthSection";
 import { DataSection } from "../components/DataSection";
-import { FeatureFlagCallout } from "../components/FeatureFlagCallout";
 
 const Home: React.FC = () => {
   return (
@@ -10,7 +9,6 @@ const Home: React.FC = () => {
       <img alt="Vex App Logo" className="h-24 w-24 drop-shadow-lg" src="/vex-app-logo.png" />
       <h1 className="text-7xl p-2 font-bold text-white drop-shadow-md">Welcome to Vex App!</h1>
       <span className="text-gray-300 p-4 text-lg">Your modern full-stack application template</span>
-      <FeatureFlagCallout />
       <AuthSection />
       <DataSection />
     </main>

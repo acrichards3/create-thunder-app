@@ -1,7 +1,6 @@
 /**
  * You probably won't need to touch this file. Edit schema.ts to add or change env variables.
  */
-import type { z } from "zod";
 import { envSchema } from "./schema";
 
 export type EnvIssue = { message: string; path: string };
@@ -23,10 +22,6 @@ const getEnvSource = (): Record<string, unknown> => {
 };
 
 const result = envSchema.safeParse(getEnvSource());
-
-export type ValidatedEnv = z.infer<typeof envSchema>;
-
-export const env: ValidatedEnv | undefined = result.success ? result.data : undefined;
 
 export const envIssues: EnvIssue[] = result.success
   ? []
