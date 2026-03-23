@@ -1,7 +1,6 @@
 import React from "react";
 import { FiChevronRight } from "react-icons/fi";
 import { Link } from "@tanstack/react-router";
-import { FeatureFlagCallout } from "./components/FeatureFlagCallout";
 import { Navbar } from "./components/navbar/Navbar";
 import { TechCard } from "./components/techCard/TechCard";
 import type { TechCardProps } from "./components/techCard/TechCard";
@@ -96,7 +95,6 @@ export function App() {
           An AI-first full-stack starter kit with strict linting, post-write hooks, and Cursor rules that keep AI agents
           writing production-quality code from the first keystroke.
         </p>
-        <FeatureFlagCallout />
         <Link
           aria-label="View documentation"
           className="group inline-flex items-center gap-2 text-violet-300 hover:text-violet-200 text-base sm:text-lg font-semibold tracking-wide transition-colors duration-200"
