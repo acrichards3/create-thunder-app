@@ -1,6 +1,6 @@
 {
   "name": "create-vex-app",
-  "version": "2.0.4",
+  "version": "2.1.0",
   "private": false,
   "type": "module",
   "description": "A monorepo template with Vite React frontend, HonoJS backend, and shared lib package",
