@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { parseAndValidateVexDocument } from "./vex/parse-and-validate-vex-document";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const fixturePath = join(__dirname, "../fixtures/sample.vex");
+const fixturePath = join(__dirname, "parse-and-validate-vex-document.fixture.vex");
 
 describe("parseAndValidateVexDocument", () => {
   describe("WHEN the source is empty", () => {
@@ -15,7 +15,7 @@ describe("parseAndValidateVexDocument", () => {
     });
   });
 
-  describe("WHEN the source is the sample fixture", () => {
+  describe("WHEN the source is the co-located .vex fixture", () => {
     describe("AND the parse result is checked for success", () => {
       it("returns ok true", () => {
         const source = readFileSync(fixturePath, "utf8");
@@ -25,10 +25,11 @@ describe("parseAndValidateVexDocument", () => {
     });
 
     describe("AND the document is inspected after a successful parse", () => {
-      it("contains two top-level functions", () => {
+      it("contains two WHEN blocks under the function", () => {
         const source = readFileSync(fixturePath, "utf8");
         const result = parseAndValidateVexDocument(source);
-        expect(result.ok === true ? (result.document?.functions.length ?? 0) : 0).toBe(2);
+        const fn0 = result.document?.functions[0];
+        expect(result.ok === true && fn0 != null ? fn0.whens.length : 0).toBe(2);
       });
     });
   });

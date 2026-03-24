@@ -1,0 +1,8 @@
+parseAndValidateVexDocument:
+  - WHEN: the source is empty
+    - IT: returns ok false with an error
+  - WHEN: the source is the co-located .vex fixture
+    - AND: the parse result is checked for success
+      - IT: returns ok true
+    - AND: the document is inspected after a successful parse
+      - IT: contains two WHEN blocks under the function
