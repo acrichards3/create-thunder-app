@@ -126,7 +126,7 @@ function renderChatMessages(container, messages) {
 }
 
 export function initAssistantPanel(input) {
-  const { saveDashboardView, state } = input;
+  const { getChatExtraFields, saveDashboardView, state } = input;
   const messages = [];
   const listEl = document.getElementById("assistant-messages");
   const form = document.getElementById("assistant-form");
@@ -162,6 +162,14 @@ export function initAssistantPanel(input) {
     setStatus(parts.join(" · "));
   }
 
+  function buildPayload() {
+    const base = {
+      messages: messages.map((m) => ({ content: m.content, role: m.role })),
+    };
+    const extra = typeof getChatExtraFields === "function" ? getChatExtraFields() : {};
+    return { ...base, ...extra };
+  }
+
   function onSubmit(ev) {
     ev.preventDefault();
     const text = inputEl.value.trim();
@@ -171,10 +179,7 @@ export function initAssistantPanel(input) {
     inputEl.value = "";
     messages.push({ content: text, role: "user" });
     renderChatMessages(listEl, messages);
-    const payload = {
-      messages: messages.map((m) => ({ content: m.content, role: m.role })),
-    };
-    void sendChatRequest(payload);
+    void sendChatRequest(buildPayload());
   }
 
   function onAssistantInputKeydown(e) {

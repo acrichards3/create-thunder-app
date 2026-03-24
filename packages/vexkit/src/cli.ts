@@ -1,13 +1,16 @@
 #!/usr/bin/env bun
 import { argv } from "bun:process";
+import { runCodegenSpecCommand } from "./cli-codegen-spec";
 import { runDashboardCommand } from "./cli-dashboard";
 import { runParseCommand } from "./cli-parse";
+import { runTestSpecCommand } from "./cli-test-spec";
+import { runVerifyCommand } from "./cli-verify";
 import { VEXKIT_VERSION } from "./index";
 
 async function printUsage(): Promise<void> {
   await Bun.write(
     Bun.stdout,
-    `vexkit ${VEXKIT_VERSION}\n\nUsage:\n  vexkit              Show version\n  vexkit parse [--json] <file|->   Parse and validate (.vex); use - for stdin\n  vexkit dashboard [--port 8888]   Spec dashboard (file tree + .vex logic tree)\n`,
+    `vexkit ${VEXKIT_VERSION}\n\nUsage:\n  vexkit              Show version\n  vexkit parse [--json] <file|->   Parse and validate (.vex); use - for stdin\n  vexkit verify <file.vex>       Check .vex vs co-located .spec.ts structure\n  vexkit codegen-spec [--force] <file.vex>   Emit paired .spec.ts skeleton\n  vexkit test-spec <file.vex>    Run bun test on paired spec (no it.todo)\n  vexkit dashboard [--port 8888]   Spec dashboard (workflow under .vexkit/; single-chat assistant)\n`,
   );
 }
 
@@ -26,6 +29,21 @@ async function main(): Promise<void> {
 
   if (sub === "dashboard") {
     runDashboardCommand(args.slice(1));
+    return;
+  }
+
+  if (sub === "verify") {
+    await runVerifyCommand(args[1] ?? "");
+    return;
+  }
+
+  if (sub === "codegen-spec") {
+    await runCodegenSpecCommand(args.slice(1));
+    return;
+  }
+
+  if (sub === "test-spec") {
+    await runTestSpecCommand(args[1] ?? "");
     return;
   }
 

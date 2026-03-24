@@ -25,6 +25,9 @@ const state = {
   parseResult: null,
   selectedFnIndex: 0,
   tree: [],
+  vexSource: "",
+  workflow: { approvalsByPath: {}, currentVexPath: "", phase: "spec" },
+  workflowSelectedStep: 0,
 };
 
 function clampExplorerWidthPx(w) {
@@ -72,9 +75,339 @@ function loadDashboardView() {
     if (typeof parsed.assistantWidthPx === "number" && Number.isFinite(parsed.assistantWidthPx)) {
       state.assistantWidthPx = Math.min(560, Math.max(260, Math.round(parsed.assistantWidthPx)));
     }
+    if (typeof parsed.workflowSelectedStep === "number" && Number.isFinite(parsed.workflowSelectedStep)) {
+      state.workflowSelectedStep = Math.max(0, Math.min(5, Math.floor(parsed.workflowSelectedStep)));
+    }
   } catch {
     /* ignore corrupt or unavailable storage */
   }
+}
+
+function setWorkflowStatus(text, isErr) {
+  const el = document.getElementById("workflow-status");
+  el.hidden = text.length === 0;
+  el.textContent = text;
+  el.classList.toggle("err", Boolean(isErr));
+}
+
+async function fetchWorkflow() {
+  const res = await fetch("/api/workflow");
+  if (!res.ok) {
+    setWorkflowStatus("Could not load workflow state.", true);
+    return;
+  }
+  state.workflow = await res.json();
+  setWorkflowStatus("");
+  renderWorkflowBar();
+}
+
+async function postWorkflow(body) {
+  const prevPhase = state.workflow.phase;
+  const res = await fetch("/api/workflow", {
+    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    setWorkflowStatus(typeof data.message === "string" ? data.message : "Workflow update failed.", true);
+    return false;
+  }
+  state.workflow = data;
+  if (data.phase !== prevPhase) {
+    state.workflowSelectedStep = computeWorkflowProgressFromState();
+    saveDashboardView();
+  }
+  setWorkflowStatus("");
+  renderWorkflowBar();
+  return true;
+}
+
+function computeWorkflowProgressIdx(input) {
+  const { allApproved, pathOk, phase } = input;
+  if (!pathOk) {
+    return 0;
+  }
+  if (phase === "spec" && !allApproved) {
+    return 1;
+  }
+  if (phase === "spec" && allApproved) {
+    return 2;
+  }
+  if (phase === "build") {
+    return 3;
+  }
+  if (phase === "done") {
+    return 5;
+  }
+  return 1;
+}
+
+function computeWorkflowProgressFromState() {
+  const pathOk = state.currentPath != null && state.currentPath.length > 0;
+  const doc = state.parseResult != null && state.parseResult.ok ? state.parseResult.document : null;
+  const fnNames = doc != null && Array.isArray(doc.functions) ? doc.functions.map((f) => f.name) : [];
+  const approved = new Set(state.workflow.approvalsByPath[state.currentPath ?? ""] ?? []);
+  const allApproved = fnNames.length > 0 && fnNames.every((n) => approved.has(n));
+  return computeWorkflowProgressIdx({
+    allApproved,
+    pathOk,
+    phase: state.workflow.phase,
+  });
+}
+
+function applyWorkflowPanelVisibility() {
+  const sel = state.workflowSelectedStep;
+  for (let i = 0; i < 6; i += 1) {
+    const p = document.getElementById(`workflow-tabpanel-${String(i)}`);
+    if (p == null) {
+      continue;
+    }
+    p.hidden = i !== sel;
+  }
+}
+
+function workflowAddButton(parent, label, onClick, disabled) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "workflow-btn";
+  btn.textContent = label;
+  btn.disabled = Boolean(disabled);
+  btn.addEventListener("click", onClick);
+  parent.append(btn);
+}
+
+function renderWorkflowStepper(progressIdx) {
+  const nav = document.getElementById("workflow-stepper");
+  nav.replaceChildren();
+  const line = document.createElement("div");
+  line.className = "stepper-line";
+  line.setAttribute("aria-hidden", "true");
+  line.setAttribute("role", "presentation");
+  const labels = ["Describe", "Spec", "Approve", "Build", "Verify", "Done"];
+  const gapCount = labels.length - 1;
+  const splitRatio = Math.min(1, Math.max(0, progressIdx / gapCount));
+  line.style.setProperty("--stepper-line-split-pct", `${String(splitRatio * 100)}%`);
+  nav.append(line);
+  const phase = state.workflow.phase;
+  const selected = state.workflowSelectedStep;
+  labels.forEach((label, i) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "stepper-node";
+    btn.id = `workflow-tab-${String(i)}`;
+    btn.setAttribute("aria-controls", `workflow-tabpanel-${String(i)}`);
+    btn.setAttribute("aria-selected", selected === i ? "true" : "false");
+    btn.setAttribute("role", "tab");
+    if (phase === "done") {
+      btn.classList.add("stepper-node--done-all");
+    } else if (i < progressIdx) {
+      btn.classList.add("stepper-node--past");
+    } else if (i === progressIdx) {
+      btn.classList.add("stepper-node--current");
+    } else {
+      btn.classList.add("stepper-node--future");
+    }
+    if (selected === i) {
+      btn.classList.add("stepper-node--selected");
+    }
+    const inner = document.createElement("span");
+    inner.className = "stepper-node__label";
+    inner.textContent = label;
+    btn.append(inner);
+    const stepIndex = i;
+    btn.addEventListener("click", () => {
+      state.workflowSelectedStep = stepIndex;
+      saveDashboardView();
+      renderWorkflowBar();
+    });
+    nav.append(btn);
+  });
+}
+
+function renderWorkflowActions(fnNames, allApproved) {
+  const continueEl = document.getElementById("workflow-actions-continue");
+  const buildEl = document.getElementById("workflow-actions-build");
+  const verifyEl = document.getElementById("workflow-actions-verify");
+  const doneEl = document.getElementById("workflow-actions-done");
+  continueEl.replaceChildren();
+  buildEl.replaceChildren();
+  verifyEl.replaceChildren();
+  doneEl.replaceChildren();
+  const phase = state.workflow.phase;
+  const pathOk = state.currentPath != null && state.currentPath.length > 0;
+
+  workflowAddButton(
+    continueEl,
+    "Continue to build",
+    () => {
+      void postWorkflow({ phase: "build" });
+    },
+    phase !== "spec" || !pathOk || !allApproved || fnNames.length === 0,
+  );
+
+  workflowAddButton(
+    buildEl,
+    "Back to spec",
+    () => {
+      void postWorkflow({ phase: "spec" });
+    },
+    phase === "spec",
+  );
+
+  workflowAddButton(
+    buildEl,
+    "Generate spec",
+    () => {
+      if (state.currentPath == null) {
+        return;
+      }
+      void (async () => {
+        const res = await fetch("/api/codegen-spec", {
+          body: JSON.stringify({ overwrite: false, path: state.currentPath }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 409) {
+          const again = await fetch("/api/codegen-spec", {
+            body: JSON.stringify({ overwrite: true, path: state.currentPath }),
+            headers: { "Content-Type": "application/json" },
+            method: "POST",
+          });
+          const d2 = await again.json().catch(() => ({}));
+          if (!again.ok) {
+            setWorkflowStatus(typeof d2.message === "string" ? d2.message : "Codegen failed.", true);
+            return;
+          }
+          setWorkflowStatus(`Wrote ${typeof d2.wrote === "string" ? d2.wrote : "spec"}.`);
+          return;
+        }
+        if (!res.ok) {
+          setWorkflowStatus(typeof data.message === "string" ? data.message : "Codegen failed.", true);
+          return;
+        }
+        setWorkflowStatus(`Wrote ${typeof data.wrote === "string" ? data.wrote : "spec"}.`);
+      })();
+    },
+    !pathOk,
+  );
+
+  workflowAddButton(
+    verifyEl,
+    "Verify pair",
+    () => {
+      if (state.currentPath == null) {
+        return;
+      }
+      void (async () => {
+        const q = new URLSearchParams({ path: state.currentPath });
+        const res = await fetch(`/api/verify-pair?${q.toString()}`);
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          setWorkflowStatus("Verify: structure matches paired .spec.ts.");
+        } else {
+          setWorkflowStatus(typeof data.message === "string" ? data.message : "Verify failed.", true);
+        }
+      })();
+    },
+    !pathOk,
+  );
+
+  workflowAddButton(
+    verifyEl,
+    "Run paired tests",
+    () => {
+      if (state.currentPath == null) {
+        return;
+      }
+      void (async () => {
+        const res = await fetch("/api/run-spec-tests", {
+          body: JSON.stringify({ path: state.currentPath }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const msg =
+            typeof data.message === "string"
+              ? data.message
+              : `${typeof data.stdout === "string" ? data.stdout : ""}${typeof data.stderr === "string" ? data.stderr : ""}`;
+          setWorkflowStatus(msg.trim().length > 0 ? msg : "Tests failed.", true);
+          return;
+        }
+        setWorkflowStatus("Tests passed.");
+      })();
+    },
+    !pathOk,
+  );
+
+  workflowAddButton(
+    doneEl,
+    "Mark done",
+    () => {
+      void postWorkflow({ phase: "done" });
+    },
+    phase !== "build",
+  );
+}
+
+function renderWorkflowApprovals(fnNames) {
+  const wrap = document.getElementById("workflow-approvals");
+  const outer = document.getElementById("workflow-approvals-wrap");
+  wrap.replaceChildren();
+  if (fnNames.length === 0 || state.workflow.phase !== "spec") {
+    outer.hidden = true;
+    return;
+  }
+  outer.hidden = false;
+  const approved = new Set(state.workflow.approvalsByPath[state.currentPath ?? ""] ?? []);
+  fnNames.forEach((name) => {
+    const row = document.createElement("div");
+    row.className = "workflow-fn-approve";
+    const lab = document.createElement("span");
+    lab.className = "workflow-fn-name";
+    lab.textContent = name;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "workflow-btn";
+    const isAp = approved.has(name);
+    btn.textContent = isAp ? "Unapprove" : "Approve";
+    btn.addEventListener("click", () => {
+      void postWorkflow(isAp ? { unapproveFunction: name } : { approveFunction: name });
+    });
+    row.append(lab, btn);
+    wrap.append(row);
+  });
+}
+
+function renderWorkflowBar() {
+  const pathOk = state.currentPath != null && state.currentPath.length > 0;
+  const doc = state.parseResult != null && state.parseResult.ok ? state.parseResult.document : null;
+  const fnNames = doc != null && Array.isArray(doc.functions) ? doc.functions.map((f) => f.name) : [];
+  const approved = new Set(state.workflow.approvalsByPath[state.currentPath ?? ""] ?? []);
+  const allApproved = fnNames.length > 0 && fnNames.every((n) => approved.has(n));
+  const phase = state.workflow.phase;
+  const progressIdx = computeWorkflowProgressIdx({ allApproved, pathOk, phase });
+
+  renderWorkflowStepper(progressIdx);
+  renderWorkflowActions(fnNames, allApproved);
+  renderWorkflowApprovals(fnNames);
+
+  const editorWrap = document.getElementById("workflow-editor-wrap");
+  const ta = document.getElementById("vex-source-editor");
+  const saveBtn = document.getElementById("vex-save-btn");
+  if (!pathOk || doc == null) {
+    editorWrap.hidden = true;
+    applyWorkflowPanelVisibility();
+    return;
+  }
+  editorWrap.hidden = false;
+  ta.value = state.vexSource;
+  const allowEdit = phase === "spec";
+  ta.disabled = !allowEdit;
+  saveBtn.disabled = !allowEdit;
+  applyWorkflowPanelVisibility();
 }
 
 function saveDashboardView() {
@@ -87,6 +420,7 @@ function saveDashboardView() {
       expandedDirs: [...state.expandedDirs],
       explorerWidthPx: typeof state.explorerWidthPx === "number" ? state.explorerWidthPx : null,
       selectedFnIndex: state.selectedFnIndex,
+      workflowSelectedStep: state.workflowSelectedStep,
     };
     localStorage.setItem(DASHBOARD_VIEW_STORAGE_KEY, JSON.stringify(payload));
   } catch {
@@ -638,11 +972,13 @@ function updateMainPanel() {
     }
     renderLogicGraph(fn);
   } finally {
+    renderWorkflowBar();
     saveDashboardView();
   }
 }
 
 async function openVexFile(relPath, options) {
+  const pathChanged = state.currentPath !== relPath;
   const resetFunctionIndex = options?.resetFunctionIndex !== false;
   state.currentPath = relPath;
   if (resetFunctionIndex) {
@@ -650,9 +986,47 @@ async function openVexFile(relPath, options) {
   }
   const params = new URLSearchParams({ path: relPath });
   const res = await fetch(`/api/document?${params.toString()}`);
-  state.parseResult = await res.json();
+  const data = await res.json();
+  state.vexSource = typeof data.source === "string" ? data.source : "";
+  state.parseResult = {
+    document: data.document,
+    errors: data.errors,
+    ok: data.ok,
+  };
+  if (res.ok) {
+    const synced = await postWorkflow({ currentVexPath: relPath });
+    if (!synced) {
+      await fetchWorkflow();
+    }
+  } else {
+    await fetchWorkflow();
+  }
+  if (pathChanged) {
+    state.workflowSelectedStep = computeWorkflowProgressFromState();
+  }
   updateMainPanel();
   renderFileTree();
+}
+
+function onVexSaveClick() {
+  void (async () => {
+    if (state.currentPath == null) {
+      return;
+    }
+    const ta = document.getElementById("vex-source-editor");
+    const res = await fetch("/api/document", {
+      body: JSON.stringify({ path: state.currentPath, source: ta.value }),
+      headers: { "Content-Type": "application/json" },
+      method: "PUT",
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setWorkflowStatus(typeof payload.message === "string" ? payload.message : "Save failed.", true);
+      return;
+    }
+    setWorkflowStatus("Saved .vex");
+    await openVexFile(state.currentPath, { resetFunctionIndex: false });
+  })();
 }
 
 document.getElementById("collapse-all-folders").addEventListener("click", collapseAllExplorerFolders);
@@ -691,6 +1065,8 @@ function onExplorerHotkey(e) {
 
 loadDashboardView();
 applyExplorerWidthFromState();
+
+document.getElementById("vex-save-btn").addEventListener("click", onVexSaveClick);
 
 function wireSidebarResize() {
   const handle = document.getElementById("sidebar-resize-handle");
@@ -754,6 +1130,7 @@ window.addEventListener("keydown", onExplorerHotkey);
 syncExplorerPanel();
 wireSidebarResize();
 
+await fetchWorkflow();
 await refreshTree();
 
 if (state.currentPath != null) {
@@ -800,4 +1177,13 @@ function connectProjectWatch() {
 
 connectProjectWatch();
 
-initAssistantPanel({ saveDashboardView, state });
+initAssistantPanel({
+  getChatExtraFields() {
+    return {
+      currentVexPath: state.workflow.currentVexPath,
+      workflowPhase: state.workflow.phase,
+    };
+  },
+  saveDashboardView,
+  state,
+});

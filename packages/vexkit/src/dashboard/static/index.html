@@ -18,6 +18,20 @@
         --it: #b88fd4;
         --err: #e07070;
         --canvas-dot: rgb(47 61 82 / 0.055);
+        --vex-violet: #8d54ff;
+        --vex-violet-light: #a78bfa;
+        --vex-violet-soft: rgb(141 84 255 / 0.32);
+        --stepper-line-past: rgb(210 195 254 / 0.78);
+        --stepper-line-future: rgb(141 84 255 / 0.22);
+        --vex-violet-glow: rgb(141 84 255 / 0.42);
+        --vex-indigo-fill: #312e81;
+        --vex-indigo-fill-hover: #4338ca;
+        --vex-stepper-label-on-fill: #f5f3ff;
+        --vex-stepper-ring-on-fill: rgb(196 181 253 / 0.88);
+        --stepper-fill: var(--vex-indigo-fill);
+        --stepper-fill-bright: var(--vex-indigo-fill-hover);
+        --stepper-ring: var(--vex-stepper-ring-on-fill);
+        --stepper-node-size: 4rem;
       }
       * {
         box-sizing: border-box;
@@ -30,6 +44,270 @@
         display: flex;
         flex-direction: column;
         overflow: hidden;
+      }
+      .workflow-strip {
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        gap: 0.65rem;
+        padding: 0.55rem 1rem 0.65rem;
+      }
+      .stepper-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        overflow-x: auto;
+        padding-bottom: 0.15rem;
+        width: 100%;
+      }
+      .stepper-track {
+        align-items: center;
+        display: flex;
+        flex-direction: column;
+        padding: 0.35rem 0 0.15rem;
+        position: relative;
+        width: 100%;
+      }
+      .stepper-line {
+        --stepper-line-split-pct: 0%;
+        background: linear-gradient(
+          to right,
+          var(--stepper-line-past) 0%,
+          var(--stepper-line-past) var(--stepper-line-split-pct),
+          var(--stepper-line-future) var(--stepper-line-split-pct),
+          var(--stepper-line-future) 100%
+        );
+        border-radius: 999px;
+        height: 2px;
+        left: calc(var(--stepper-node-size) / 2);
+        pointer-events: none;
+        position: absolute;
+        right: calc(var(--stepper-node-size) / 2);
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 0;
+      }
+      .stepper-nodes {
+        align-self: center;
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        gap: 0;
+        justify-content: space-between;
+        max-width: 44rem;
+        min-width: 0;
+        position: relative;
+        width: 100%;
+        z-index: 1;
+      }
+      .stepper-node {
+        align-items: center;
+        background: var(--bg);
+        block-size: var(--stepper-node-size);
+        border: 2px solid var(--stepper-ring);
+        border-radius: 50%;
+        color: var(--text);
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: 0.62rem;
+        font-weight: 600;
+        justify-content: center;
+        letter-spacing: 0.03em;
+        line-height: 1.15;
+        padding: 0.25rem;
+        position: relative;
+        text-align: center;
+        text-transform: uppercase;
+        inline-size: var(--stepper-node-size);
+        transition:
+          background 0.18s ease,
+          border-color 0.18s ease,
+          box-shadow 0.18s ease,
+          transform 0.15s ease,
+          color 0.18s ease;
+      }
+      .stepper-node:hover {
+        border-color: var(--vex-violet-light);
+        color: var(--text);
+      }
+      .stepper-node:focus-visible {
+        box-shadow: 0 0 0 3px var(--vex-violet-glow);
+        outline: none;
+      }
+      .stepper-node__label {
+        display: block;
+        max-width: 3.35rem;
+      }
+      .stepper-node--past {
+        background: var(--stepper-fill);
+        border-color: var(--stepper-ring);
+        color: var(--vex-stepper-label-on-fill);
+      }
+      .stepper-node--past:hover {
+        background: var(--stepper-fill-bright);
+      }
+      .stepper-node--current {
+        background: var(--bg);
+        border-color: var(--vex-violet-light);
+        box-shadow:
+          0 0 0 1px var(--bg),
+          0 0 0 3px var(--vex-violet-glow);
+        color: var(--text);
+      }
+      .stepper-node--future {
+        background: var(--bg);
+        border-color: var(--vex-violet-soft);
+        color: rgb(237 233 254 / 0.88);
+      }
+      .stepper-node--future:hover {
+        border-color: rgb(167 139 250 / 0.55);
+      }
+      .stepper-node--done-all {
+        background: var(--stepper-fill);
+        border-color: var(--stepper-ring);
+        color: var(--vex-stepper-label-on-fill);
+      }
+      .stepper-node--selected {
+        transform: scale(1.06);
+      }
+      .stepper-node--selected.stepper-node--future {
+        border-color: var(--vex-violet);
+        color: rgb(237 233 254 / 0.95);
+      }
+      .workflow-panels {
+        min-height: 2.5rem;
+        position: relative;
+      }
+      .workflow-step-panel {
+        animation: workflow-panel-in 0.22s ease;
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+      }
+      .workflow-step-panel[hidden] {
+        display: none;
+      }
+      @keyframes workflow-panel-in {
+        from {
+          opacity: 0;
+          transform: translateY(4px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .workflow-panel-title {
+        color: var(--muted);
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .workflow-panel-lead {
+        color: rgb(231 236 243 / 0.88);
+        font-size: 0.8rem;
+        line-height: 1.45;
+        max-width: 40rem;
+      }
+      .workflow-code {
+        font-family: ui-monospace, monospace;
+        font-size: 0.88em;
+      }
+      .workflow-actions-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+      .workflow-btn {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--muted);
+        cursor: pointer;
+        font: inherit;
+        font-size: 0.72rem;
+        padding: 0.3rem 0.55rem;
+      }
+      .workflow-btn:hover {
+        border-color: var(--accent);
+        color: var(--text);
+      }
+      .workflow-btn:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+      .workflow-approvals-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+      }
+      .workflow-approvals-label {
+        color: var(--muted);
+        font-size: 0.68rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .workflow-approvals {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+      .workflow-fn-approve {
+        align-items: center;
+        display: flex;
+        gap: 0.35rem;
+      }
+      .workflow-fn-name {
+        color: var(--text);
+        font-size: 0.75rem;
+      }
+      .workflow-editor-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+      }
+      .workflow-editor-label {
+        color: var(--muted);
+        font-size: 0.68rem;
+      }
+      .workflow-vex-editor {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        font-family: ui-monospace, monospace;
+        font-size: 0.75rem;
+        line-height: 1.4;
+        min-height: 6rem;
+        padding: 0.45rem 0.5rem;
+        resize: vertical;
+        width: 100%;
+      }
+      .workflow-vex-editor:focus {
+        border-color: var(--accent);
+        outline: none;
+      }
+      .workflow-vex-editor:disabled {
+        opacity: 0.55;
+      }
+      .workflow-editor-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+      .workflow-status {
+        color: var(--muted);
+        font-size: 0.68rem;
+        white-space: pre-wrap;
+      }
+      .workflow-status.err {
+        color: var(--err);
       }
       .app-header {
         flex-shrink: 0;
@@ -492,6 +770,109 @@
         ⟫
       </button>
     </header>
+    <section aria-label="Workflow" class="workflow-strip" id="workflow-strip">
+      <div class="stepper-shell">
+        <div class="stepper-track">
+          <nav aria-label="Spec workflow steps" class="stepper-nodes" id="workflow-stepper" role="tablist"></nav>
+        </div>
+      </div>
+      <div class="workflow-panels" id="workflow-panels">
+        <div aria-labelledby="workflow-tab-0" class="workflow-step-panel" id="workflow-tabpanel-0" role="tabpanel">
+          <div class="workflow-panel-title">Describe</div>
+          <p class="workflow-panel-lead">
+            Tell the assistant what you want—new feature, change to existing behavior, or edge cases to cover. When you
+            are ready, move to Spec so the model can shape the <code class="workflow-code">.vex</code> trees.
+          </p>
+        </div>
+        <div
+          aria-labelledby="workflow-tab-1"
+          class="workflow-step-panel"
+          hidden
+          id="workflow-tabpanel-1"
+          role="tabpanel"
+        >
+          <div class="workflow-panel-title">Spec</div>
+          <p class="workflow-panel-lead">
+            Source of truth for decision trees. Edits here stay in sync with the graph; in the build phase this editor
+            is read-only for the agent (you can still edit on disk if needed).
+          </p>
+          <div class="workflow-editor-wrap" hidden id="workflow-editor-wrap">
+            <label class="workflow-editor-label" for="vex-source-editor">.vex source</label>
+            <textarea
+              autocomplete="off"
+              class="workflow-vex-editor"
+              id="vex-source-editor"
+              rows="8"
+              spellcheck="false"
+            ></textarea>
+            <div class="workflow-editor-actions">
+              <button class="workflow-btn" id="vex-save-btn" type="button">Save .vex</button>
+            </div>
+          </div>
+        </div>
+        <div
+          aria-labelledby="workflow-tab-2"
+          class="workflow-step-panel"
+          hidden
+          id="workflow-tabpanel-2"
+          role="tabpanel"
+        >
+          <div class="workflow-panel-title">Approve</div>
+          <p class="workflow-panel-lead">
+            Approve each function tree before build. The agent cannot change
+            <code class="workflow-code">.vex</code> after you continue to build.
+          </p>
+          <div class="workflow-approvals-wrap" hidden id="workflow-approvals-wrap">
+            <div class="workflow-approvals-label">Function approvals</div>
+            <div class="workflow-approvals" id="workflow-approvals"></div>
+          </div>
+          <div class="workflow-actions-row" id="workflow-actions-continue"></div>
+        </div>
+        <div
+          aria-labelledby="workflow-tab-3"
+          class="workflow-step-panel"
+          hidden
+          id="workflow-tabpanel-3"
+          role="tabpanel"
+        >
+          <div class="workflow-panel-title">Build</div>
+          <p class="workflow-panel-lead">
+            Generate the paired <code class="workflow-code">.spec.ts</code> skeleton and implementation. Use Back to
+            spec if requirements need to change.
+          </p>
+          <div class="workflow-actions-row" id="workflow-actions-build"></div>
+        </div>
+        <div
+          aria-labelledby="workflow-tab-4"
+          class="workflow-step-panel"
+          hidden
+          id="workflow-tabpanel-4"
+          role="tabpanel"
+        >
+          <div class="workflow-panel-title">Verify</div>
+          <p class="workflow-panel-lead">
+            Confirm the spec structure matches the <code class="workflow-code">.vex</code> file, then run the paired
+            tests.
+          </p>
+          <div class="workflow-actions-row" id="workflow-actions-verify"></div>
+        </div>
+        <div
+          aria-labelledby="workflow-tab-5"
+          class="workflow-step-panel"
+          hidden
+          id="workflow-tabpanel-5"
+          role="tabpanel"
+        >
+          <div class="workflow-panel-title">Done</div>
+          <p class="workflow-panel-lead">
+            When structure checks and tests pass with no <code class="workflow-code">it.todo</code>, mark the workflow
+            done and start the next feature when you are ready.
+          </p>
+          <div class="workflow-actions-row" id="workflow-actions-done"></div>
+        </div>
+      </div>
+      <p class="workflow-status" hidden id="workflow-status"></p>
+    </section>
     <div id="layout">
       <script>
         (function () {

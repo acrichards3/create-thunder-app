@@ -6,6 +6,7 @@ import {
   type OpenAiChatMessage,
 } from "./assistant-openai.js";
 import { executeRepoTool, getRepoToolsOpenAiDefinitions, REPO_TOOL_NAMES } from "./assistant-repo-tools.js";
+import { readWorkflowState, type WorkflowPhase } from "./workflow-store.js";
 import {
   callMcpTool,
   isMcpConfiguredInEnv,
@@ -111,12 +112,18 @@ function isCompletionFailure(x: { assistantMessage: OpenAiChatMessage } | { erro
   return !Object.prototype.hasOwnProperty.call(x, "assistantMessage");
 }
 
-async function dispatchToolCall(input: { argumentsJson: string; name: string; rootAbs: string }): Promise<string> {
+async function dispatchToolCall(input: {
+  argumentsJson: string;
+  name: string;
+  rootAbs: string;
+  workflowPhase: WorkflowPhase;
+}): Promise<string> {
   if (REPO_TOOL_NAMES.has(input.name)) {
     return executeRepoTool({
       argumentsJson: input.argumentsJson,
       name: input.name,
       rootAbs: input.rootAbs,
+      workflowPhase: input.workflowPhase,
     });
   }
   return callMcpTool({
@@ -132,6 +139,7 @@ async function respondWithAgentToolLoop(
     type: "function";
   }>,
   rootAbs: string,
+  workflowPhase: WorkflowPhase,
 ): Promise<Response> {
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
     const completion = await completeChatNonStreaming({
@@ -149,6 +157,7 @@ async function respondWithAgentToolLoop(
           argumentsJson: tc.function.arguments,
           name: tc.function.name,
           rootAbs,
+          workflowPhase,
         });
         conversation.push({
           content: result,
@@ -186,7 +195,12 @@ export async function postAssistantChat(req: Request): Promise<Response> {
     return ndjsonErrorResponse("Set VEXKIT_CHAT_API_KEY to enable chat.", 503);
   }
 
-  const systemLine = `You are a coding agent in the vexkit spec dashboard. Project root: ${assistantProjectRoot}. You MUST use the repo_* tools to read and change files (repo_list_dir, repo_read_file, repo_write_file, repo_search_replace). Paths are always relative to the project root. Do not use absolute paths or parent segments. You cannot access .git or node_modules. After editing, summarize what changed. When MCP tools are also available, you may use them as needed.`;
+  const wf = await readWorkflowState(assistantProjectRoot);
+  const phaseHint =
+    wf.phase === "spec"
+      ? "Workflow phase is SPEC: you may only write or replace content in files whose path ends with .vex."
+      : "Workflow phase is BUILD/DONE: do not modify .vex files; implement co-located .spec.ts and application source instead.";
+  const systemLine = `You are a coding agent in the vexkit spec dashboard. Project root: ${assistantProjectRoot}. ${phaseHint} You MUST use the repo_* tools to read and change files (repo_list_dir, repo_read_file, repo_write_file, repo_search_replace). Paths are always relative to the project root. Do not use absolute paths or parent segments. You cannot access .git or node_modules or write under .vexkit/. After editing, summarize what changed. When MCP tools are also available, you may use them as needed.`;
   const history: OpenAiChatMessage[] = messages.map((m) => ({
     content: m.content,
     role: m.role,
@@ -197,5 +211,5 @@ export async function postAssistantChat(req: Request): Promise<Response> {
   const mcpTools = mcpToolsToOpenAiShapes(await listMcpTools());
   const allTools = [...repoDefs, ...mcpTools];
 
-  return respondWithAgentToolLoop(conversation, allTools, assistantProjectRoot);
+  return respondWithAgentToolLoop(conversation, allTools, assistantProjectRoot, wf.phase);
 }

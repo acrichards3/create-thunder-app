@@ -38,3 +38,6 @@ coverage/
 
 # Spec-first workflow state — managed automatically by hooks
 .spec-pending
+
+# Vexkit dashboard workflow session (local only)
+.vexkit/

@@ -1,10 +1,12 @@
 import { tryCatch } from "@vex-app/lib";
+import { splitPathSegments } from "./assistant-repo-path.js";
 import {
   handleRepoListDir,
   handleRepoReadFile,
   handleRepoSearchReplace,
   handleRepoWriteFile,
 } from "./assistant-repo-tool-impl.js";
+import type { WorkflowPhase } from "./workflow-store.js";
 
 export const REPO_TOOL_NAMES_LIST = [
   "repo_list_dir",
@@ -98,22 +100,47 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
-const repoToolRunners: Record<RepoToolName, (args: Record<string, unknown>, rootAbs: string) => Promise<string>> = {
-  repo_list_dir: async (args, rootAbs) => {
+function agentWriteDeniedMessage(phase: WorkflowPhase, rawPath: string): string {
+  const segments = splitPathSegments(rawPath);
+  if (segments.length === 0) {
+    return "";
+  }
+  if (segments[0] === ".vexkit") {
+    return "Writes under .vexkit/ are not allowed for the assistant.";
+  }
+  const last = segments.at(-1) ?? "";
+  const isVex = last.endsWith(".vex");
+  if (phase === "spec") {
+    if (!isVex) {
+      return "Workflow phase is SPEC: only .vex files may be written. Use the dashboard to move to Build when the spec is approved.";
+    }
+    return "";
+  }
+  if (isVex) {
+    return "Workflow phase is BUILD/DONE: .vex files are read-only for the assistant. Switch to Spec in the dashboard to edit .vex.";
+  }
+  return "";
+}
+
+const repoToolRunners: Record<
+  RepoToolName,
+  (args: Record<string, unknown>, rootAbs: string, workflowPhase: WorkflowPhase) => Promise<string>
+> = {
+  repo_list_dir: async (args, rootAbs, _workflowPhase) => {
     const pathVal = args.path;
     if (typeof pathVal !== "string") {
       return "Missing path.";
     }
     return handleRepoListDir({ rawPath: pathVal, rootAbs });
   },
-  repo_read_file: async (args, rootAbs) => {
+  repo_read_file: async (args, rootAbs, _workflowPhase) => {
     const pathVal = args.path;
     if (typeof pathVal !== "string") {
       return "Missing path.";
     }
     return handleRepoReadFile({ rawPath: pathVal, rootAbs });
   },
-  repo_search_replace: async (args, rootAbs) => {
+  repo_search_replace: async (args, rootAbs, workflowPhase) => {
     const pathVal = args.path;
     const oldVal = args.old_string;
     const newVal = args.new_string;
@@ -126,6 +153,10 @@ const repoToolRunners: Record<RepoToolName, (args: Record<string, unknown>, root
     if (typeof newVal !== "string") {
       return "Missing path, old_string, or new_string.";
     }
+    const deny = agentWriteDeniedMessage(workflowPhase, pathVal);
+    if (deny.length > 0) {
+      return deny;
+    }
     return handleRepoSearchReplace({
       new_string: newVal,
       old_string: oldVal,
@@ -133,7 +164,7 @@ const repoToolRunners: Record<RepoToolName, (args: Record<string, unknown>, root
       rootAbs,
     });
   },
-  repo_write_file: async (args, rootAbs) => {
+  repo_write_file: async (args, rootAbs, workflowPhase) => {
     const pathVal = args.path;
     const contentVal = args.content;
     if (typeof pathVal !== "string") {
@@ -141,6 +172,10 @@ const repoToolRunners: Record<RepoToolName, (args: Record<string, unknown>, root
     }
     if (typeof contentVal !== "string") {
       return "Missing path or content.";
+    }
+    const deny = agentWriteDeniedMessage(workflowPhase, pathVal);
+    if (deny.length > 0) {
+      return deny;
     }
     return handleRepoWriteFile({ content: contentVal, rawPath: pathVal, rootAbs });
   },
@@ -150,6 +185,7 @@ export async function executeRepoTool(input: {
   argumentsJson: string;
   name: string;
   rootAbs: string;
+  workflowPhase: WorkflowPhase;
 }): Promise<string> {
   const [parsed, err] = tryCatch((): unknown => JSON.parse(input.argumentsJson));
   if (err != null) {
@@ -161,5 +197,5 @@ export async function executeRepoTool(input: {
   if (!isRepoToolName(input.name)) {
     return "Unknown repo tool.";
   }
-  return repoToolRunners[input.name](parsed, input.rootAbs);
+  return repoToolRunners[input.name](parsed, input.rootAbs, input.workflowPhase);
 }
