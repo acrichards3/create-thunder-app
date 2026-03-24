@@ -1,11 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { parseAndValidateVexDocument } from "./vex/parse-and-validate-vex-document";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const fixturePath = join(__dirname, "parse-and-validate-vex-document.fixture.vex");
+const fixturePath = `${import.meta.dirname}/parse-and-validate-vex-document.fixture.vex`;
 
 describe("parseAndValidateVexDocument", () => {
   describe("WHEN the source is empty", () => {
@@ -17,16 +13,16 @@ describe("parseAndValidateVexDocument", () => {
 
   describe("WHEN the source is the co-located .vex fixture", () => {
     describe("AND the parse result is checked for success", () => {
-      it("returns ok true", () => {
-        const source = readFileSync(fixturePath, "utf8");
+      it("returns ok true", async () => {
+        const source = await Bun.file(fixturePath).text();
         const result = parseAndValidateVexDocument(source);
         expect(result.ok).toBe(true);
       });
     });
 
     describe("AND the document is inspected after a successful parse", () => {
-      it("contains two WHEN blocks under the function", () => {
-        const source = readFileSync(fixturePath, "utf8");
+      it("contains two WHEN blocks under the function", async () => {
+        const source = await Bun.file(fixturePath).text();
         const result = parseAndValidateVexDocument(source);
         const fn0 = result.document?.functions[0];
         expect(result.ok === true && fn0 != null ? fn0.whens.length : 0).toBe(2);

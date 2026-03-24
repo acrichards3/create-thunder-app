@@ -1,0 +1,42 @@
+createTodo:
+  - WHEN: the client sends a non-empty title and optional notes
+    - IT: returns 201 with the new todo id and timestamps
+  - WHEN: the title is missing or empty
+    - IT: returns 400 with a validation error
+  - WHEN: the user is not authenticated
+    - IT: returns 401 and does not create a todo
+
+listTodos:
+  - WHEN: the user is authenticated
+    - IT: returns 200 with todos ordered by created date newest first
+  - WHEN: the user is not authenticated
+    - IT: returns 401 with an empty list body
+
+getTodo:
+  - WHEN: the todo id exists and belongs to the current user
+    - IT: returns 200 with the full todo payload
+  - WHEN: the id exists but belongs to another user
+    - IT: returns 404 without leaking existence
+  - WHEN: no todo matches the id
+    - IT: returns 404
+  - WHEN: the id format is invalid
+    - IT: returns 400
+
+updateTodo:
+  - WHEN: the todo exists, belongs to the user, and the patch is valid
+    - AND: at least one of title, notes, or completed is provided
+      - IT: returns 200 with the updated todo
+  - WHEN: the body is empty or has no allowed fields
+    - IT: returns 400 with a clear error
+  - WHEN: the todo does not exist or is not owned by the user
+    - IT: returns 404
+  - WHEN: the user is not authenticated
+    - IT: returns 401
+
+deleteTodo:
+  - WHEN: the todo exists and belongs to the current user
+    - IT: returns 204 and removes the row
+  - WHEN: the todo does not exist or is not owned by the user
+    - IT: returns 404
+  - WHEN: the user is not authenticated
+    - IT: returns 401

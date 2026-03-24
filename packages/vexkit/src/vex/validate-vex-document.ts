@@ -44,6 +44,15 @@ function validateWhenBranch(fnName: string, when: VexWhen): VexParseError[] {
     return branchErrors;
   }
 
+  const directIts = when.branches.filter((b) => b.kind === "it");
+  if (directIts.length > 1) {
+    const extra = directIts[1];
+    branchErrors.push({
+      line: extra.line,
+      message: `${path}: a WHEN may have at most one IT at this level; use AND for additional branches.`,
+    });
+  }
+
   for (let i = 0; i < when.branches.length; i += 1) {
     const branch = when.branches[i];
     const branchPath = `${path} > branch ${String(i + 1)}`;

@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1" name="viewport" />
+    <title>vexkit — spec dashboard</title>
+    <link rel="icon" href="data:," />
+    <style>
+      :root {
+        --bg: #0f1419;
+        --panel: #1a2332;
+        --border: #2d3a4d;
+        --text: #e7ecf3;
+        --muted: #8b9cb3;
+        --accent: #5b9fd4;
+        --when: #c4a35a;
+        --and: #7ab87a;
+        --it: #b88fd4;
+        --err: #e07070;
+        --canvas-dot: rgb(47 61 82 / 0.055);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .app-header {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        padding: 0.5rem 1rem;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.875rem;
+        color: var(--muted);
+      }
+      .explorer-toggle {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--muted);
+        cursor: pointer;
+        flex-shrink: 0;
+        font: inherit;
+        line-height: 1.2;
+        min-width: 2rem;
+        padding: 0.25rem 0.45rem;
+        text-align: center;
+      }
+      .explorer-toggle:hover {
+        border-color: var(--accent);
+        color: var(--text);
+      }
+      .header-root {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #layout {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+      }
+      #sidebar {
+        background: var(--panel);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        min-height: 0;
+        overflow: hidden;
+        padding: 0;
+        transition:
+          border-color 0.2s ease,
+          opacity 0.15s ease,
+          width 0.2s ease;
+        width: min(320px, 38vw);
+      }
+      #layout.sidebar-explorer-collapsed #sidebar {
+        border-right-color: transparent;
+        border-right-width: 0;
+        min-width: 0;
+        opacity: 0;
+        overflow: hidden;
+        pointer-events: none;
+        width: 0;
+      }
+      .sidebar-toolbar {
+        flex-shrink: 0;
+        padding: 0.4rem 0.5rem;
+        border-bottom: 1px solid var(--border);
+      }
+      .sidebar-tree {
+        flex: 1;
+        overflow: auto;
+        padding: 0.5rem 0;
+      }
+      .sidebar-action-btn {
+        font: inherit;
+        font-size: 0.75rem;
+        cursor: pointer;
+        width: 100%;
+        padding: 0.35rem 0.5rem;
+        border-radius: 4px;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--muted);
+      }
+      .sidebar-action-btn:hover {
+        border-color: var(--accent);
+        color: var(--text);
+      }
+      #main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        overflow: hidden;
+      }
+      #toolbar {
+        flex-shrink: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid var(--border);
+        align-items: center;
+      }
+      #toolbar:empty {
+        display: none;
+      }
+      #tree-panel {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        overflow: hidden;
+        padding: 0.75rem 1rem;
+      }
+      .file-list {
+        list-style: none;
+        padding: 0 0 0 0.75rem;
+      }
+      .file-list.root {
+        padding-left: 0.5rem;
+      }
+      .file-row {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.15rem 0.25rem;
+        border-radius: 4px;
+        font-size: 0.8125rem;
+      }
+      .file-row:hover {
+        background: rgba(255, 255, 255, 0.04);
+      }
+      .file-row.file-vex {
+        cursor: pointer;
+        color: var(--accent);
+      }
+      .file-row.file-other {
+        color: var(--muted);
+      }
+      .twisty {
+        width: 1rem;
+        text-align: center;
+        cursor: pointer;
+        user-select: none;
+        color: var(--muted);
+      }
+      .fn-btn {
+        font: inherit;
+        cursor: pointer;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        border: 1px solid var(--border);
+        background: var(--panel);
+        color: var(--text);
+      }
+      .fn-btn:hover {
+        border-color: var(--accent);
+      }
+      .fn-btn.active {
+        border-color: var(--accent);
+        background: rgba(91, 159, 212, 0.15);
+      }
+      .logic-canvas-wrap {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        font-size: 0.875rem;
+        line-height: 1.35;
+        min-height: 0;
+      }
+      .logic-canvas-hint {
+        color: var(--muted);
+        flex-shrink: 0;
+        font-size: 0.72rem;
+        padding-bottom: 0.35rem;
+      }
+      .logic-canvas-viewport {
+        background-color: var(--bg);
+        background-image: radial-gradient(circle at center, var(--canvas-dot) 1px, transparent 1px);
+        background-size: 22px 22px;
+        cursor: grab;
+        flex: 1;
+        min-height: min(50vh, 420px);
+        min-width: 0;
+        overflow: hidden;
+        touch-action: none;
+      }
+      .logic-canvas-viewport.logic-canvas-grabbing {
+        cursor: grabbing;
+      }
+      .logic-canvas-svg {
+        display: block;
+        height: 100%;
+        width: 100%;
+      }
+      .logic-node-rect {
+        filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
+      }
+      .logic-node-kind {
+        fill: var(--muted);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      .logic-node-label {
+        fill: var(--text);
+        font-size: 12px;
+      }
+      .logic-node-line {
+        fill: var(--muted);
+        font-size: 10px;
+        font-variant-numeric: tabular-nums;
+      }
+      .logic-node-kind-fn {
+        fill: var(--accent);
+      }
+      .logic-node-kind-when {
+        fill: var(--when);
+      }
+      .logic-node-kind-and {
+        fill: var(--and);
+      }
+      .logic-node-kind-it {
+        fill: var(--it);
+      }
+      .logic-node-stroke-fn {
+        stroke: var(--accent);
+      }
+      .logic-node-stroke-when {
+        stroke: var(--when);
+      }
+      .logic-node-stroke-and {
+        stroke: var(--and);
+      }
+      .logic-node-stroke-it {
+        stroke: var(--it);
+      }
+      .logic-link-path {
+        fill: none;
+        marker-end: url("#logic-arrow");
+        stroke: #7a8aa0;
+        stroke-width: 1.5;
+      }
+      .placeholder {
+        color: var(--muted);
+        font-size: 0.875rem;
+      }
+      .error-box {
+        color: var(--err);
+        font-size: 0.875rem;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="app-header">
+      <button
+        aria-controls="sidebar"
+        aria-expanded="true"
+        class="explorer-toggle"
+        id="toggle-explorer"
+        title="Hide file explorer (Ctrl+B or ⌘B)"
+        type="button"
+      >
+        ⟨
+      </button>
+      <span class="header-root" id="header-root">Loading project…</span>
+    </header>
+    <div id="layout">
+      <script>
+        (function () {
+          try {
+            const raw = localStorage.getItem("vexkit.dashboard.view.v1");
+            if (raw == null) {
+              return;
+            }
+            const parsed = JSON.parse(raw);
+            if (parsed.explorerCollapsed !== true) {
+              return;
+            }
+            const layout = document.getElementById("layout");
+            if (layout != null) {
+              layout.classList.add("sidebar-explorer-collapsed");
+            }
+            const btn = document.getElementById("toggle-explorer");
+            if (btn != null) {
+              btn.setAttribute("aria-expanded", "false");
+              btn.textContent = "⟩";
+              btn.setAttribute("title", "Show file explorer (Ctrl+B or ⌘B)");
+              btn.setAttribute("aria-label", "Show file explorer");
+            }
+          } catch {
+            /* ignore */
+          }
+        })();
+      </script>
+      <nav aria-label="Project files" id="sidebar">
+        <div class="sidebar-toolbar">
+          <button class="sidebar-action-btn" id="collapse-all-folders" type="button">Collapse all folders</button>
+        </div>
+        <div class="sidebar-tree" id="sidebar-tree"></div>
+      </nav>
+      <div id="main">
+        <div id="toolbar"></div>
+        <div id="tree-panel">
+          <p class="placeholder" id="hint">Select a <code>.vex</code> file in the sidebar.</p>
+          <div class="error-box" hidden id="parse-errors"></div>
+          <div class="logic-canvas-wrap" hidden id="logic-tree">
+            <p class="logic-canvas-hint">Scroll to zoom · drag empty space to pan</p>
+            <div class="logic-canvas-viewport" id="logic-canvas-viewport">
+              <svg class="logic-canvas-svg" id="logic-canvas-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

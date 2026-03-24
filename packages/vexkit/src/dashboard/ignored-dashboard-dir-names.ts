@@ -1,0 +1,16 @@
+export const IGNORED_DASHBOARD_DIR_NAMES = new Set([
+  ".git",
+  ".svn",
+  ".hg",
+  ".DS_Store",
+  ".cursor",
+  ".idea",
+  ".vscode",
+  "node_modules",
+  "dist",
+  "build",
+  "coverage",
+  ".cache",
+  ".vite",
+  ".output",
+]);

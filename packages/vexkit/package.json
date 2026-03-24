@@ -17,6 +17,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "dashboard": "bun ./src/cli.ts dashboard",
     "dev": "tsc --watch",
     "test": "bun test --passWithNoTests",
     "typecheck": "tsc --noEmit",
