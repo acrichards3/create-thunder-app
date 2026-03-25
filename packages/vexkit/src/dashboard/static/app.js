@@ -2,9 +2,9 @@ import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7.9.0/+esm";
 import { initAssistantPanel } from "./chat-panel.js";
 
 const NS = "http://www.w3.org/2000/svg";
-const NODE_H = 74;
-const NODE_MIN_W = 128;
-const NODE_MAX_W = 260;
+const NODE_H = 68;
+const NODE_MIN_W = 120;
+const NODE_MAX_W = 248;
 const NODE_LEVEL_GAP_X = 16;
 const TREE_LEAF_SPACING_X = 58;
 const TREE_DEPTH_PER_LEVEL = 112;
@@ -147,6 +147,9 @@ async function postWorkflow(body) {
     return false;
   }
   state.workflow = data;
+  if (body.resetWorkflow === true) {
+    state.hasSpokenToAssistant = false;
+  }
   if (data.phase !== prevPhase) {
     state.workflowSelectedStep = computeWorkflowProgressFromState();
     saveDashboardView();
@@ -172,6 +175,9 @@ function computeWorkflowProgressIdx(input) {
   }
   if (phase === "build") {
     return 3;
+  }
+  if (phase === "verify") {
+    return 4;
   }
   if (phase === "done") {
     return 5;
@@ -273,6 +279,7 @@ function renderWorkflowActions(fnNames, allApproved) {
   doneEl.replaceChildren();
   const phase = state.workflow.phase;
   const pathOk = state.currentPath != null && state.currentPath.length > 0;
+  const verifyOk = state.workflow.verifyLastResult != null && state.workflow.verifyLastResult.ok === true;
 
   workflowAddButton(
     continueEl,
@@ -289,7 +296,16 @@ function renderWorkflowActions(fnNames, allApproved) {
     () => {
       void postWorkflow({ phase: "spec" });
     },
-    phase === "spec",
+    phase !== "build" && phase !== "verify",
+  );
+
+  workflowAddButton(
+    buildEl,
+    "Proceed to verify",
+    () => {
+      void postWorkflow({ phase: "verify" });
+    },
+    phase !== "build",
   );
 
   workflowAddButton(
@@ -327,7 +343,33 @@ function renderWorkflowActions(fnNames, allApproved) {
         setWorkflowStatus(`Wrote ${typeof data.wrote === "string" ? data.wrote : "spec"}.`);
       })();
     },
-    !pathOk,
+    phase !== "build" || !pathOk,
+  );
+
+  workflowAddButton(
+    verifyEl,
+    "Run full verify",
+    () => {
+      void (async () => {
+        const res = await fetch("/api/workflow/verify-run", {
+          method: "POST",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (typeof data.state === "object" && data.state != null) {
+          state.workflow = data.state;
+        }
+        if (res.ok) {
+          setWorkflowStatus("Verify pipeline passed.");
+          renderWorkflowBar();
+          return;
+        }
+        const msg =
+          typeof data.log === "string" ? data.log : typeof data.message === "string" ? data.message : "Verify failed.";
+        setWorkflowStatus(msg, true);
+        renderWorkflowBar();
+      })();
+    },
+    phase !== "verify",
   );
 
   workflowAddButton(
@@ -385,7 +427,16 @@ function renderWorkflowActions(fnNames, allApproved) {
     () => {
       void postWorkflow({ phase: "done" });
     },
-    phase !== "build",
+    phase !== "verify" || !verifyOk,
+  );
+
+  workflowAddButton(
+    doneEl,
+    "Restart workflow",
+    () => {
+      void postWorkflow({ resetWorkflow: true });
+    },
+    phase !== "done",
   );
 }
 
@@ -399,6 +450,17 @@ function renderWorkflowApprovals(fnNames) {
   }
   outer.hidden = false;
   const approved = new Set(state.workflow.approvalsByPath[state.currentPath ?? ""] ?? []);
+  const approveAllRow = document.createElement("div");
+  approveAllRow.className = "workflow-fn-approve";
+  const approveAllBtn = document.createElement("button");
+  approveAllBtn.type = "button";
+  approveAllBtn.className = "workflow-btn";
+  approveAllBtn.textContent = "Approve all functions";
+  approveAllBtn.addEventListener("click", () => {
+    void postWorkflow({ approveAllFunctionsForCurrentPath: true });
+  });
+  approveAllRow.append(approveAllBtn);
+  wrap.append(approveAllRow);
   fnNames.forEach((name) => {
     const row = document.createElement("div");
     row.className = "workflow-fn-approve";
@@ -662,7 +724,7 @@ function measureNodeWidth(d) {
   const raw = d.data.label;
   const ell = raw.length > 44 ? `${raw.slice(0, 42)}…` : raw;
   d.displayLabel = ell;
-  const w = Math.round(Math.min(NODE_MAX_W, Math.max(NODE_MIN_W, ell.length * 6.6 + 52)));
+  const w = Math.round(Math.min(NODE_MAX_W, Math.max(NODE_MIN_W, ell.length * 6.2 + 48)));
   d.nodeWidth = w;
   return w;
 }
@@ -932,7 +994,7 @@ function drawNodes(nodesLayer, hierarchyRoot) {
     rect.setAttribute("class", "logic-node-rect");
     rect.setAttribute("fill", theme.fill);
     rect.setAttribute("height", String(NODE_H));
-    rect.setAttribute("rx", "8");
+    rect.setAttribute("rx", "7");
     rect.setAttribute("stroke", theme.stroke);
     rect.setAttribute("stroke-width", "1.75");
     rect.setAttribute("width", String(w));
@@ -941,16 +1003,16 @@ function drawNodes(nodesLayer, hierarchyRoot) {
 
     const kindEl = document.createElementNS(NS, "text");
     kindEl.setAttribute("fill", theme.kind);
-    kindEl.setAttribute("font-size", "9px");
+    kindEl.setAttribute("font-size", "8px");
     kindEl.setAttribute("font-weight", "700");
     kindEl.setAttribute("text-anchor", "middle");
     kindEl.setAttribute("x", "0");
-    kindEl.setAttribute("y", String(-NODE_H / 2 + 17));
+    kindEl.setAttribute("y", String(-NODE_H / 2 + 16));
     kindEl.textContent = kindLabel(d.data.kind);
 
     const lab = document.createElementNS(NS, "text");
     lab.setAttribute("fill", "#e7ecf3");
-    lab.setAttribute("font-size", "12px");
+    lab.setAttribute("font-size", "11px");
     lab.setAttribute("text-anchor", "middle");
     lab.setAttribute("x", "0");
     lab.setAttribute("y", "4");
@@ -966,10 +1028,10 @@ function drawNodes(nodesLayer, hierarchyRoot) {
 
     const lineEl = document.createElementNS(NS, "text");
     lineEl.setAttribute("fill", "#8b9cb3");
-    lineEl.setAttribute("font-size", "10px");
+    lineEl.setAttribute("font-size", "9px");
     lineEl.setAttribute("text-anchor", "middle");
     lineEl.setAttribute("x", "0");
-    lineEl.setAttribute("y", String(NODE_H / 2 - 10));
+    lineEl.setAttribute("y", String(NODE_H / 2 - 9));
     lineEl.textContent = `Line ${String(d.data.line)}`;
 
     g.append(hit, rect, kindEl, lab, lineEl, tip);
@@ -1392,6 +1454,7 @@ initAssistantPanel({
   getChatExtraFields() {
     return {
       currentVexPath: state.workflow.currentVexPath,
+      hasSpokenToAssistant: state.hasSpokenToAssistant,
       workflowPhase: state.workflow.phase,
     };
   },

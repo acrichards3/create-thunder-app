@@ -7,6 +7,9 @@ export function isWorkflowPhaseValue(v: unknown): v is WorkflowPhase {
   if (v === "build") {
     return true;
   }
+  if (v === "verify") {
+    return true;
+  }
   if (v === "done") {
     return true;
   }

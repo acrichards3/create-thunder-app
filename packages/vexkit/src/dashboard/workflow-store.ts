@@ -5,12 +5,15 @@ import { parseAndValidateVexDocument } from "../vex/parse-and-validate-vex-docum
 import { resolveSafeVexPath } from "./resolve-safe-vex-path";
 import { isWorkflowPhaseValue } from "./workflow-phase-guard.js";
 
-export type WorkflowPhase = "build" | "done" | "spec";
+export type WorkflowPhase = "build" | "done" | "spec" | "verify";
+
+export type VerifyLastResult = { log: string; ok: boolean };
 
 export type WorkflowState = {
   approvalsByPath: Record<string, string[]>;
   currentVexPath: string;
   phase: WorkflowPhase;
+  verifyLastResult?: VerifyLastResult;
 };
 
 const WORKFLOW_DIR = ".vexkit";
@@ -67,10 +70,20 @@ export function parseWorkflowJson(text: string): WorkflowState {
   const phaseRaw = parsed.phase;
   const phase: WorkflowPhase = isWorkflowPhaseValue(phaseRaw) ? phaseRaw : "spec";
   const currentVexPath = typeof parsed.currentVexPath === "string" ? parsed.currentVexPath : "";
+  const verifyRaw = parsed.verifyLastResult;
+  let verifyLastResult: VerifyLastResult | undefined = undefined;
+  if (isRecord(verifyRaw)) {
+    const ok = verifyRaw.ok;
+    const log = verifyRaw.log;
+    if (typeof ok === "boolean" && typeof log === "string") {
+      verifyLastResult = { log, ok };
+    }
+  }
   return {
     approvalsByPath: normalizeApprovals(parsed.approvalsByPath),
     currentVexPath,
     phase,
+    ...(verifyLastResult != null ? { verifyLastResult } : {}),
   };
 }
 
@@ -95,11 +108,14 @@ export async function writeWorkflowState(rootAbs: string, state: WorkflowState):
   if (mkdirErr != null) {
     return;
   }
-  const payload = {
+  const payload: Record<string, unknown> = {
     approvalsByPath: state.approvalsByPath,
     currentVexPath: state.currentVexPath,
     phase: state.phase,
   };
+  if (state.verifyLastResult != null) {
+    payload.verifyLastResult = state.verifyLastResult;
+  }
   await Bun.write(path, `${JSON.stringify(payload, null, 2)}\n`);
 }
 
@@ -164,4 +180,14 @@ export async function canTransitionToBuild(input: {
     return { message: "Approve every function tree in the current .vex file before build.", ok: false };
   }
   return { ok: true };
+}
+
+export function canTransitionToDone(state: WorkflowState): { message: string; ok: boolean } {
+  if (state.phase !== "verify") {
+    return { message: "Done is only available after verify.", ok: false };
+  }
+  if (state.verifyLastResult?.ok !== true) {
+    return { message: "Verification must pass before marking done.", ok: false };
+  }
+  return { message: "", ok: true };
 }

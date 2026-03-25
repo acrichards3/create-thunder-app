@@ -148,10 +148,12 @@ export function initAssistantPanel(input) {
     }
     const data = await res.json();
     const parts = [];
-    if (data.hasChatKey) {
+    if (data.useCursorAgent) {
+      parts.push("Cursor agent (ACP)");
+    } else if (data.hasChatKey) {
       parts.push(`Model: ${data.model}`);
     } else {
-      parts.push("Set VEXKIT_CHAT_API_KEY");
+      parts.push("Set VEXKIT_CHAT_API_KEY or VEXKIT_USE_CURSOR_AGENT=1 + CURSOR_API_KEY");
     }
     if (data.mcpConfigured) {
       parts.push("MCP configured");
@@ -179,9 +181,6 @@ export function initAssistantPanel(input) {
     inputEl.value = "";
     messages.push({ content: text, role: "user" });
     renderChatMessages(listEl, messages);
-    if (typeof onUserMessageSent === "function") {
-      onUserMessageSent();
-    }
     void sendChatRequest(buildPayload());
   }
 
@@ -226,6 +225,7 @@ export function initAssistantPanel(input) {
     const dec = new TextDecoder();
     let carry = "";
     let acc = "";
+    let sawStreamError = false;
     for (;;) {
       const { done, value } = await reader.read();
       if (done) {
@@ -251,6 +251,7 @@ export function initAssistantPanel(input) {
           renderChatMessages(listEl, messages);
         }
         if (ev.type === "error" && typeof ev.message === "string") {
+          sawStreamError = true;
           acc += `\n${ev.message}`;
           messages[assistantIdx].content = acc;
           renderChatMessages(listEl, messages);
@@ -258,6 +259,9 @@ export function initAssistantPanel(input) {
       });
     }
     void refreshStatus();
+    if (!sawStreamError && typeof onUserMessageSent === "function") {
+      onUserMessageSent();
+    }
   }
 
   form.addEventListener("submit", onSubmit);

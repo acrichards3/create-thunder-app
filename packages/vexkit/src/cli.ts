@@ -10,7 +10,7 @@ import { VEXKIT_VERSION } from "./index";
 async function printUsage(): Promise<void> {
   await Bun.write(
     Bun.stdout,
-    `vexkit ${VEXKIT_VERSION}\n\nUsage:\n  vexkit              Show version\n  vexkit parse [--json] <file|->   Parse and validate (.vex); use - for stdin\n  vexkit verify <file.vex>       Check .vex vs co-located .spec.ts structure\n  vexkit codegen-spec [--force] <file.vex>   Emit paired .spec.ts skeleton\n  vexkit test-spec <file.vex>    Run bun test on paired spec (no it.todo)\n  vexkit dashboard [--port 8888]   Spec dashboard (workflow under .vexkit/; single-chat assistant)\n`,
+    `vexkit ${VEXKIT_VERSION}\n\nUsage:\n  vexkit              Show version\n  vexkit parse [--json] <file|->   Parse and validate (.vex); use - for stdin\n  vexkit verify <file.vex>       Check .vex vs co-located .spec.ts structure\n  vexkit codegen-spec [--force] <file.vex>   Emit paired .spec.ts skeleton\n  vexkit test-spec <file.vex>    Run bun test on paired spec (no it.todo)\n  vexkit dashboard [--port 8888]   Spec dashboard (workflow under .vexkit/; chat assistant)\n\nDashboard env:\n  VEXKIT_CHAT_API_KEY / VEXKIT_CHAT_MODEL   OpenAI-compatible chat (default when Cursor off)\n  VEXKIT_USE_CURSOR_AGENT=1 and CURSOR_API_KEY   Cursor CLI agent via ACP (agent install path)\n  VEXKIT_CURSOR_AGENT_BIN   Optional path to agent binary\n`,
   );
 }
 

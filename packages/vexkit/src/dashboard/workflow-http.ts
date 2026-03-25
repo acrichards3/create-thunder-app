@@ -1,6 +1,12 @@
 import { tryCatchAsync } from "@vex-app/lib";
 import { resolveSafeVexPath } from "./resolve-safe-vex-path";
-import { canTransitionToBuild, readWorkflowState, type WorkflowState, writeWorkflowState } from "./workflow-store.js";
+import {
+  listFunctionNamesForVexPath,
+  readWorkflowState,
+  type WorkflowState,
+  writeWorkflowState,
+} from "./workflow-store.js";
+import { validateWorkflowPhaseChange } from "./workflow-phase-transition.js";
 import { isWorkflowPhaseValue } from "./workflow-phase-guard.js";
 
 function jsonResponse(data: unknown, status: number): Response {
@@ -67,6 +73,33 @@ function applyApproveFunctionField(input: {
   return { error: null };
 }
 
+async function applyApproveAllFunctionsField(input: {
+  body: Record<string, unknown>;
+  next: WorkflowState;
+  rootAbs: string;
+  state: WorkflowState;
+}): Promise<FieldResult> {
+  if (input.body.approveAllFunctionsForCurrentPath !== true) {
+    return { error: null };
+  }
+  const key = input.next.currentVexPath;
+  if (key.length === 0) {
+    return { error: { message: "Set currentVexPath before approving functions.", state: input.state, status: 400 } };
+  }
+  const namesResult = await listFunctionNamesForVexPath({
+    rootAbs: input.rootAbs,
+    vexRelativePath: key,
+  });
+  if (namesResult.kind === "error") {
+    return { error: { message: namesResult.message, state: input.state, status: 400 } };
+  }
+  input.next.approvalsByPath = {
+    ...input.next.approvalsByPath,
+    [key]: [...namesResult.functionNames].toSorted((a, b) => a.localeCompare(b)),
+  };
+  return { error: null };
+}
+
 function applyUnapproveFunctionField(input: {
   body: Record<string, unknown>;
   next: WorkflowState;
@@ -121,13 +154,23 @@ async function applyPhaseField(input: {
   if (!isWorkflowPhaseValue(phaseRaw)) {
     return { error: { message: "Invalid phase.", state: input.state, status: 400 } };
   }
-  if (phaseRaw === "build") {
-    const check = await canTransitionToBuild({ rootAbs: input.rootAbs, state: input.next });
-    if (!check.ok) {
-      return { error: { message: check.message, state: input.state, status: 400 } };
-    }
+  const prev = input.state.phase;
+  const transitionErr = await validateWorkflowPhaseChange({
+    nextPhase: phaseRaw,
+    nextState: input.next,
+    prevPhase: prev,
+    rootAbs: input.rootAbs,
+    state: input.state,
+  });
+  if (transitionErr != null) {
+    return { error: { message: transitionErr.message, state: input.state, status: transitionErr.status } };
   }
+
   input.next.phase = phaseRaw;
+  const backFromVerify = phaseRaw === "build" ? true : phaseRaw === "spec";
+  if (prev === "verify" && backFromVerify) {
+    delete input.next.verifyLastResult;
+  }
   return { error: null };
 }
 
@@ -136,10 +179,22 @@ async function applyPostBody(input: {
   rootAbs: string;
   state: WorkflowState;
 }): Promise<{ message?: string; state: WorkflowState; status: number }> {
+  if (input.body.resetWorkflow === true) {
+    return {
+      state: {
+        approvalsByPath: {},
+        currentVexPath: "",
+        phase: "spec",
+      },
+      status: 200,
+    };
+  }
+
   const next: WorkflowState = {
     approvalsByPath: { ...input.state.approvalsByPath },
     currentVexPath: input.state.currentVexPath,
     phase: input.state.phase,
+    ...(input.state.verifyLastResult != null ? { verifyLastResult: input.state.verifyLastResult } : {}),
   };
 
   const pathRes = await applyCurrentVexPathField({
@@ -156,6 +211,17 @@ async function applyPostBody(input: {
   const apRes = applyApproveFunctionField({ body: input.body, next, state: input.state });
   if (apRes.error != null) {
     const err = apRes.error;
+    return { message: err.message, state: err.state, status: err.status };
+  }
+
+  const apAllRes = await applyApproveAllFunctionsField({
+    body: input.body,
+    next,
+    rootAbs: input.rootAbs,
+    state: input.state,
+  });
+  if (apAllRes.error != null) {
+    const err = apAllRes.error;
     return { message: err.message, state: err.state, status: err.status };
   }
 

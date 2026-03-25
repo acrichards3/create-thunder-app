@@ -1,11 +1,11 @@
 import { tryCatch } from "@vex-app/lib";
-import { splitPathSegments } from "./assistant-repo-path.js";
 import {
   handleRepoListDir,
   handleRepoReadFile,
   handleRepoSearchReplace,
   handleRepoWriteFile,
 } from "./assistant-repo-tool-impl.js";
+import { getRepoWriteDenialReason } from "./repo-write-policy.js";
 import type { WorkflowPhase } from "./workflow-store.js";
 
 export const REPO_TOOL_NAMES_LIST = [
@@ -100,28 +100,6 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
-function agentWriteDeniedMessage(phase: WorkflowPhase, rawPath: string): string {
-  const segments = splitPathSegments(rawPath);
-  if (segments.length === 0) {
-    return "";
-  }
-  if (segments[0] === ".vexkit") {
-    return "Writes under .vexkit/ are not allowed for the assistant.";
-  }
-  const last = segments.at(-1) ?? "";
-  const isVex = last.endsWith(".vex");
-  if (phase === "spec") {
-    if (!isVex) {
-      return "Workflow phase is SPEC: only .vex files may be written. Use the dashboard to move to Build when the spec is approved.";
-    }
-    return "";
-  }
-  if (isVex) {
-    return "Workflow phase is BUILD/DONE: .vex files are read-only for the assistant. Switch to Spec in the dashboard to edit .vex.";
-  }
-  return "";
-}
-
 const repoToolRunners: Record<
   RepoToolName,
   (args: Record<string, unknown>, rootAbs: string, workflowPhase: WorkflowPhase) => Promise<string>
@@ -153,7 +131,7 @@ const repoToolRunners: Record<
     if (typeof newVal !== "string") {
       return "Missing path, old_string, or new_string.";
     }
-    const deny = agentWriteDeniedMessage(workflowPhase, pathVal);
+    const deny = getRepoWriteDenialReason(workflowPhase, pathVal);
     if (deny.length > 0) {
       return deny;
     }
@@ -173,7 +151,7 @@ const repoToolRunners: Record<
     if (typeof contentVal !== "string") {
       return "Missing path or content.";
     }
-    const deny = agentWriteDeniedMessage(workflowPhase, pathVal);
+    const deny = getRepoWriteDenialReason(workflowPhase, pathVal);
     if (deny.length > 0) {
       return deny;
     }

@@ -1,4 +1,6 @@
 import { tryCatchAsync } from "@vex-app/lib";
+import { buildBuildSystemPrompt, buildSpecSystemPrompt, DESCRIBE_WORKFLOW_INTRO } from "./cursor-assistant-prompts.js";
+import { isCursorAgentConfigured, runCursorAcpPrompt, shouldUseCursorAgent } from "./cursor-acp-session.js";
 import {
   completeChatNonStreaming,
   getAssistantChatEnv,
@@ -38,9 +40,11 @@ export function getAssistantStatusResponse(): Response {
   return jsonResponse(
     {
       hasChatKey: env.hasApiKey,
+      hasCursorKey: isCursorAgentConfigured(),
       mcpConfigured: isMcpConfiguredInEnv(),
       model: env.model,
       repoAgentTools: true,
+      useCursorAgent: shouldUseCursorAgent(),
     },
     200,
   );
@@ -80,6 +84,41 @@ function parseChatBody(data: unknown): IncomingMsg[] {
   return out;
 }
 
+function parseHasSpokenToAssistant(data: unknown): boolean {
+  if (!isRecord(data)) {
+    return false;
+  }
+  const v = data.hasSpokenToAssistant;
+  if (typeof v === "boolean") {
+    return v;
+  }
+  return false;
+}
+
+function transcriptFromMessages(messages: IncomingMsg[]): string {
+  return messages.map((m) => `${m.role}: ${m.content}`).join("\n\n");
+}
+
+function buildCursorPromptText(input: {
+  hasSpokenToAssistant: boolean;
+  messages: IncomingMsg[];
+  phase: WorkflowPhase;
+  rootAbs: string;
+}): string {
+  const { hasSpokenToAssistant, messages, phase, rootAbs } = input;
+  if (phase === "spec" && !hasSpokenToAssistant) {
+    const lastUser = messages.filter((m) => m.role === "user").at(-1)?.content ?? "";
+    return `${DESCRIBE_WORKFLOW_INTRO}${lastUser}`;
+  }
+  if (phase === "spec") {
+    return `${buildSpecSystemPrompt(rootAbs)}\n\n${transcriptFromMessages(messages)}`;
+  }
+  if (phase === "build") {
+    return `${buildBuildSystemPrompt(rootAbs)}\n\n${transcriptFromMessages(messages)}`;
+  }
+  return `${buildBuildSystemPrompt(rootAbs)}\n\n${transcriptFromMessages(messages)}`;
+}
+
 function ndjsonErrorResponse(message: string, status: number): Response {
   return new Response(ndjsonLine({ message, type: "error" }), {
     headers: { "Content-Type": "application/x-ndjson; charset=utf-8" },
@@ -93,6 +132,57 @@ function ndjsonTextResponse(text: string): Response {
     new ReadableStream({
       start(controller) {
         controller.enqueue(enc.encode(ndjsonLine({ text, type: "delta" })));
+        controller.enqueue(enc.encode(ndjsonLine({ type: "done" })));
+        controller.close();
+      },
+    }),
+    {
+      headers: {
+        "Cache-Control": "no-cache",
+        "Content-Type": "application/x-ndjson; charset=utf-8",
+      },
+    },
+  );
+}
+
+function ndjsonCursorStreamResponse(input: {
+  hasSpokenToAssistant: boolean;
+  messages: IncomingMsg[];
+  phase: WorkflowPhase;
+  rootAbs: string;
+}): Response {
+  const enc = new TextEncoder();
+  return new Response(
+    new ReadableStream({
+      async start(controller) {
+        const promptText = buildCursorPromptText({
+          hasSpokenToAssistant: input.hasSpokenToAssistant,
+          messages: input.messages,
+          phase: input.phase,
+          rootAbs: input.rootAbs,
+        });
+        const [run, err] = await tryCatchAsync(async () =>
+          runCursorAcpPrompt({
+            onDelta: (t) => {
+              controller.enqueue(enc.encode(ndjsonLine({ text: t, type: "delta" })));
+            },
+            phase: input.phase,
+            promptText,
+            rootAbs: input.rootAbs,
+          }),
+        );
+        if (err != null) {
+          controller.enqueue(enc.encode(ndjsonLine({ message: err.message, type: "error" })));
+          controller.enqueue(enc.encode(ndjsonLine({ type: "done" })));
+          controller.close();
+          return;
+        }
+        if (!run.ok) {
+          controller.enqueue(enc.encode(ndjsonLine({ message: run.message, type: "error" })));
+          controller.enqueue(enc.encode(ndjsonLine({ type: "done" })));
+          controller.close();
+          return;
+        }
         controller.enqueue(enc.encode(ndjsonLine({ type: "done" })));
         controller.close();
       },
@@ -177,6 +267,16 @@ async function respondWithAgentToolLoop(
   return ndjsonErrorResponse("Too many tool rounds.", 502);
 }
 
+function phaseHintForOpenAi(phase: WorkflowPhase): string {
+  if (phase === "spec") {
+    return "Workflow phase is SPEC: you may only write or replace content in files whose path ends with .vex.";
+  }
+  if (phase === "verify" || phase === "done") {
+    return "Workflow phase is VERIFY/DONE: chat should not run; if forced, do not modify .vex files.";
+  }
+  return "Workflow phase is BUILD: do not modify .vex files; implement co-located .spec.ts and application source instead.";
+}
+
 export async function postAssistantChat(req: Request): Promise<Response> {
   const [rawBody, bodyErr] = await tryCatchAsync(async () => req.json());
   if (bodyErr != null) {
@@ -190,16 +290,31 @@ export async function postAssistantChat(req: Request): Promise<Response> {
     return jsonResponse({ message: "Invalid chat messages." }, 400);
   }
 
-  const env = getAssistantChatEnv();
-  if (!env.hasApiKey) {
-    return ndjsonErrorResponse("Set VEXKIT_CHAT_API_KEY to enable chat.", 503);
+  const wf = await readWorkflowState(assistantProjectRoot);
+  if (wf.phase === "verify" || wf.phase === "done") {
+    return ndjsonErrorResponse("Chat is disabled in the verify and done steps.", 400);
   }
 
-  const wf = await readWorkflowState(assistantProjectRoot);
-  const phaseHint =
-    wf.phase === "spec"
-      ? "Workflow phase is SPEC: you may only write or replace content in files whose path ends with .vex."
-      : "Workflow phase is BUILD/DONE: do not modify .vex files; implement co-located .spec.ts and application source instead.";
+  const hasSpokenToAssistant = parseHasSpokenToAssistant(rawBody);
+
+  if (shouldUseCursorAgent()) {
+    return ndjsonCursorStreamResponse({
+      hasSpokenToAssistant,
+      messages,
+      phase: wf.phase,
+      rootAbs: assistantProjectRoot,
+    });
+  }
+
+  const env = getAssistantChatEnv();
+  if (!env.hasApiKey) {
+    return ndjsonErrorResponse(
+      "Set VEXKIT_CHAT_API_KEY to enable chat, or set VEXKIT_USE_CURSOR_AGENT=1 and CURSOR_API_KEY for Cursor.",
+      503,
+    );
+  }
+
+  const phaseHint = phaseHintForOpenAi(wf.phase);
   const systemLine = `You are a coding agent in the vexkit spec dashboard. Project root: ${assistantProjectRoot}. ${phaseHint} You MUST use the repo_* tools to read and change files (repo_list_dir, repo_read_file, repo_write_file, repo_search_replace). Paths are always relative to the project root. Do not use absolute paths or parent segments. You cannot access .git or node_modules or write under .vexkit/. After editing, summarize what changed. When MCP tools are also available, you may use them as needed.`;
   const history: OpenAiChatMessage[] = messages.map((m) => ({
     content: m.content,

@@ -31,7 +31,7 @@
         --stepper-fill: var(--vex-indigo-fill);
         --stepper-fill-bright: var(--vex-indigo-fill-hover);
         --stepper-ring: var(--vex-stepper-ring-on-fill);
-        --stepper-node-size: 4rem;
+        --stepper-node-size: 3.5rem;
       }
       * {
         box-sizing: border-box;
@@ -46,12 +46,25 @@
         overflow: hidden;
       }
       .workflow-strip {
-        border-bottom: 1px solid var(--border);
         display: flex;
         flex-direction: column;
         flex-shrink: 0;
-        gap: 0.65rem;
-        padding: 0.55rem 1rem 0.65rem;
+        gap: 0.5rem;
+      }
+      #assistant-panel .workflow-strip {
+        --stepper-node-size: 2.85rem;
+        border-bottom: 1px solid var(--border);
+        max-height: min(46vh, 440px);
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        padding: 0.35rem 0.85rem 0.45rem;
+      }
+      #assistant-panel .stepper-node {
+        font-size: 0.5rem;
+      }
+      #assistant-panel .workflow-panel-lead {
+        font-size: 0.7rem;
       }
       .stepper-shell {
         display: flex;
@@ -68,6 +81,9 @@
         padding: 0.35rem 0 0.15rem;
         position: relative;
         width: 100%;
+      }
+      #assistant-panel .stepper-track {
+        padding-inline: 0.2rem;
       }
       .stepper-line {
         --stepper-line-split-pct: 0%;
@@ -113,7 +129,7 @@
         flex-direction: column;
         flex-shrink: 0;
         font-family: ui-sans-serif, system-ui, sans-serif;
-        font-size: 0.62rem;
+        font-size: 0.56rem;
         font-weight: 600;
         justify-content: center;
         letter-spacing: 0.03em;
@@ -140,7 +156,7 @@
       }
       .stepper-node__label {
         display: block;
-        max-width: 3.35rem;
+        max-width: 3rem;
       }
       .stepper-node--past {
         background: var(--stepper-fill);
@@ -172,7 +188,7 @@
         color: var(--vex-stepper-label-on-fill);
       }
       .stepper-node--selected {
-        transform: scale(1.06);
+        transform: scale(1.03);
       }
       .stepper-node--selected.stepper-node--future {
         border-color: var(--vex-violet);
@@ -204,14 +220,14 @@
       .workflow-panel-title {
         color: var(--muted);
         font-family: ui-sans-serif, system-ui, sans-serif;
-        font-size: 0.65rem;
+        font-size: 0.6rem;
         font-weight: 600;
         letter-spacing: 0.06em;
         text-transform: uppercase;
       }
       .workflow-panel-lead {
         color: rgb(231 236 243 / 0.88);
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         line-height: 1.45;
         max-width: 40rem;
       }
@@ -329,7 +345,9 @@
       }
       .workflow-status {
         color: var(--muted);
+        flex-shrink: 0;
         font-size: 0.68rem;
+        padding: 0 0.45rem;
         white-space: pre-wrap;
       }
       .workflow-status.err {
@@ -719,18 +737,18 @@
       }
       .logic-node-kind {
         fill: var(--muted);
-        font-size: 9px;
+        font-size: 8px;
         font-weight: 700;
         letter-spacing: 0.1em;
         text-transform: uppercase;
       }
       .logic-node-label {
         fill: var(--text);
-        font-size: 12px;
+        font-size: 11px;
       }
       .logic-node-line {
         fill: var(--muted);
-        font-size: 10px;
+        font-size: 9px;
         font-variant-numeric: tabular-nums;
       }
       .logic-node-kind-fn {
@@ -799,98 +817,6 @@
         ⟫
       </button>
     </header>
-    <section aria-label="Workflow" class="workflow-strip" id="workflow-strip">
-      <div class="stepper-shell">
-        <div class="stepper-track">
-          <nav aria-label="Spec workflow steps" class="stepper-nodes" id="workflow-stepper" role="tablist"></nav>
-        </div>
-      </div>
-      <div class="workflow-panels" id="workflow-panels">
-        <div aria-labelledby="workflow-tab-0" class="workflow-step-panel" id="workflow-tabpanel-0" role="tabpanel">
-          <div class="workflow-panel-title">Describe</div>
-          <p class="workflow-panel-lead">
-            Tell the assistant what you want—one iteration can touch several <code class="workflow-code">.vex</code>
-            files. After you send your first message, the workflow moves to Spec so the model can shape the trees. Open
-            files in the sidebar as needed; the current file is just the focused tree.
-          </p>
-        </div>
-        <div
-          aria-labelledby="workflow-tab-1"
-          class="workflow-step-panel"
-          hidden
-          id="workflow-tabpanel-1"
-          role="tabpanel"
-        >
-          <div class="workflow-panel-title">Spec</div>
-          <p class="workflow-panel-lead">
-            The graph is the source of truth. In spec phase, click any node in the tree to edit its label; changes are
-            saved to the <code class="workflow-code">.vex</code> file. In build phase the agent cannot edit
-            <code class="workflow-code">.vex</code> (you can still edit on disk if needed).
-          </p>
-        </div>
-        <div
-          aria-labelledby="workflow-tab-2"
-          class="workflow-step-panel"
-          hidden
-          id="workflow-tabpanel-2"
-          role="tabpanel"
-        >
-          <div class="workflow-panel-title">Approve</div>
-          <p class="workflow-panel-lead">
-            Approve each function tree before build. The agent cannot change
-            <code class="workflow-code">.vex</code> after you continue to build.
-          </p>
-          <div class="workflow-approvals-wrap" hidden id="workflow-approvals-wrap">
-            <div class="workflow-approvals-label">Function approvals</div>
-            <div class="workflow-approvals" id="workflow-approvals"></div>
-          </div>
-          <div class="workflow-actions-row" id="workflow-actions-continue"></div>
-        </div>
-        <div
-          aria-labelledby="workflow-tab-3"
-          class="workflow-step-panel"
-          hidden
-          id="workflow-tabpanel-3"
-          role="tabpanel"
-        >
-          <div class="workflow-panel-title">Build</div>
-          <p class="workflow-panel-lead">
-            Generate the paired <code class="workflow-code">.spec.ts</code> skeleton and implementation. Use Back to
-            spec if requirements need to change.
-          </p>
-          <div class="workflow-actions-row" id="workflow-actions-build"></div>
-        </div>
-        <div
-          aria-labelledby="workflow-tab-4"
-          class="workflow-step-panel"
-          hidden
-          id="workflow-tabpanel-4"
-          role="tabpanel"
-        >
-          <div class="workflow-panel-title">Verify</div>
-          <p class="workflow-panel-lead">
-            Confirm the spec structure matches the <code class="workflow-code">.vex</code> file, then run the paired
-            tests.
-          </p>
-          <div class="workflow-actions-row" id="workflow-actions-verify"></div>
-        </div>
-        <div
-          aria-labelledby="workflow-tab-5"
-          class="workflow-step-panel"
-          hidden
-          id="workflow-tabpanel-5"
-          role="tabpanel"
-        >
-          <div class="workflow-panel-title">Done</div>
-          <p class="workflow-panel-lead">
-            When structure checks and tests pass with no <code class="workflow-code">it.todo</code>, mark the workflow
-            done and start the next feature when you are ready.
-          </p>
-          <div class="workflow-actions-row" id="workflow-actions-done"></div>
-        </div>
-      </div>
-      <p class="workflow-status" hidden id="workflow-status"></p>
-    </section>
     <div id="layout">
       <script>
         (function () {
@@ -980,6 +906,104 @@
         ></div>
         <div id="assistant-panel">
           <div class="assistant-panel-head">Assistant</div>
+          <section aria-label="Workflow" class="workflow-strip" id="workflow-strip">
+            <div class="stepper-shell">
+              <div class="stepper-track">
+                <nav aria-label="Spec workflow steps" class="stepper-nodes" id="workflow-stepper" role="tablist"></nav>
+              </div>
+            </div>
+            <div class="workflow-panels" id="workflow-panels">
+              <div
+                aria-labelledby="workflow-tab-0"
+                class="workflow-step-panel"
+                id="workflow-tabpanel-0"
+                role="tabpanel"
+              >
+                <div class="workflow-panel-title">Describe</div>
+                <p class="workflow-panel-lead">
+                  Tell the assistant what you want—one iteration can touch several
+                  <code class="workflow-code">.vex</code>
+                  files. After you send your first message, the workflow moves to Spec so the model can shape the trees.
+                  Open files in the sidebar as needed; the current file is just the focused tree.
+                </p>
+              </div>
+              <div
+                aria-labelledby="workflow-tab-1"
+                class="workflow-step-panel"
+                hidden
+                id="workflow-tabpanel-1"
+                role="tabpanel"
+              >
+                <div class="workflow-panel-title">Spec</div>
+                <p class="workflow-panel-lead">
+                  The graph is the source of truth. In spec phase, click any node in the tree to edit its label; changes
+                  are saved to the <code class="workflow-code">.vex</code> file. In build phase the agent cannot edit
+                  <code class="workflow-code">.vex</code> (you can still edit on disk if needed).
+                </p>
+              </div>
+              <div
+                aria-labelledby="workflow-tab-2"
+                class="workflow-step-panel"
+                hidden
+                id="workflow-tabpanel-2"
+                role="tabpanel"
+              >
+                <div class="workflow-panel-title">Approve</div>
+                <p class="workflow-panel-lead">
+                  Approve each function tree before build. The agent cannot change
+                  <code class="workflow-code">.vex</code> after you continue to build.
+                </p>
+                <div class="workflow-approvals-wrap" hidden id="workflow-approvals-wrap">
+                  <div class="workflow-approvals-label">Function approvals</div>
+                  <div class="workflow-approvals" id="workflow-approvals"></div>
+                </div>
+                <div class="workflow-actions-row" id="workflow-actions-continue"></div>
+              </div>
+              <div
+                aria-labelledby="workflow-tab-3"
+                class="workflow-step-panel"
+                hidden
+                id="workflow-tabpanel-3"
+                role="tabpanel"
+              >
+                <div class="workflow-panel-title">Build</div>
+                <p class="workflow-panel-lead">
+                  Generate the paired <code class="workflow-code">.spec.ts</code> skeleton and implementation. Use Back
+                  to spec if requirements need to change.
+                </p>
+                <div class="workflow-actions-row" id="workflow-actions-build"></div>
+              </div>
+              <div
+                aria-labelledby="workflow-tab-4"
+                class="workflow-step-panel"
+                hidden
+                id="workflow-tabpanel-4"
+                role="tabpanel"
+              >
+                <div class="workflow-panel-title">Verify</div>
+                <p class="workflow-panel-lead">
+                  Confirm the spec structure matches the <code class="workflow-code">.vex</code> file, then run the
+                  paired tests.
+                </p>
+                <div class="workflow-actions-row" id="workflow-actions-verify"></div>
+              </div>
+              <div
+                aria-labelledby="workflow-tab-5"
+                class="workflow-step-panel"
+                hidden
+                id="workflow-tabpanel-5"
+                role="tabpanel"
+              >
+                <div class="workflow-panel-title">Done</div>
+                <p class="workflow-panel-lead">
+                  When structure checks and tests pass with no <code class="workflow-code">it.todo</code>, mark the
+                  workflow done and start the next feature when you are ready.
+                </p>
+                <div class="workflow-actions-row" id="workflow-actions-done"></div>
+              </div>
+            </div>
+          </section>
+          <p class="workflow-status" hidden id="workflow-status"></p>
           <div class="assistant-messages" id="assistant-messages"></div>
           <p class="assistant-status" id="assistant-status"></p>
           <form autocomplete="off" class="assistant-form" id="assistant-form">
