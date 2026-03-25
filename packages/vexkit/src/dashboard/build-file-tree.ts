@@ -1,8 +1,7 @@
 import { readdir } from "bun:fs/promises";
 import { join } from "bun:path";
-import { IGNORED_DASHBOARD_DIR_NAMES } from "./ignored-dashboard-dir-names";
 
-export type DashboardFileTreeNode = {
+type DashboardFileTreeNode = {
   children?: DashboardFileTreeNode[];
   kind: "directory" | "file";
   name: string;
@@ -14,10 +13,6 @@ async function readOneDirectory(absDir: string, relDir: string): Promise<Dashboa
   const nodes: DashboardFileTreeNode[] = [];
 
   for (const ent of entries) {
-    if (IGNORED_DASHBOARD_DIR_NAMES.has(ent.name)) {
-      continue;
-    }
-
     const rel = relDir === "" ? ent.name : `${relDir}/${ent.name}`;
 
     if (ent.isDirectory()) {

@@ -1,10 +1,7 @@
 import { join } from "bun:path";
 import { realpath } from "bun:fs/promises";
 
-export const BLOCKED_SEGMENTS = new Set([".git", "node_modules"]);
-export const MAX_READ_CHARS = 400_000;
-export const MAX_WRITE_CHARS = 400_000;
-export const MAX_LIST_ENTRIES = 200;
+const BLOCKED_SEGMENTS = new Set([".git", "node_modules"]);
 
 export function splitPathSegments(raw: string): string[] {
   return raw.split("/").filter((s) => s.length > 0 && s !== ".");

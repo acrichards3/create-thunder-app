@@ -1,5 +1,5 @@
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7.9.0/+esm";
-import { initAssistantPanel } from "./chat-panel.js";
+import { initAssistantPanel } from "./chat-panel.js?v=5";
 
 const NS = "http://www.w3.org/2000/svg";
 const NODE_H = 68;
@@ -12,6 +12,60 @@ const TREE_LAYOUT_MIN_DEPTH_PX = 168;
 const TREE_LAYOUT_MIN_BREADTH = 340;
 
 const DASHBOARD_VIEW_STORAGE_KEY = "vexkit.dashboard.view.v1";
+const WORKFLOW_STEP_LABELS = ["Describe", "Spec", "Approve", "Build", "Verify", "Done"];
+
+function wireWorkflowRevertModal() {
+  const overlay = document.getElementById("workflow-revert-modal-overlay");
+  const bodyEl = document.getElementById("workflow-revert-modal-body");
+  const titleEl = document.getElementById("workflow-revert-modal-title");
+  const cancelBtn = document.getElementById("workflow-revert-modal-cancel");
+  const confirmBtn = document.getElementById("workflow-revert-modal-confirm");
+  if (overlay == null || bodyEl == null || titleEl == null || cancelBtn == null || confirmBtn == null) {
+    return () => {};
+  }
+  let pendingStep = null;
+  function closeModal() {
+    pendingStep = null;
+    overlay.hidden = true;
+    overlay.setAttribute("aria-hidden", "true");
+  }
+  function openModal(step) {
+    pendingStep = step;
+    const label = WORKFLOW_STEP_LABELS[step];
+    titleEl.textContent = `Revert to ${label}?`;
+    bodyEl.textContent = `You will move the workflow back to ${label}. Approvals, verify results, and phase progress after that point will be cleared or reset for this run.`;
+    overlay.hidden = false;
+    overlay.setAttribute("aria-hidden", "false");
+    confirmBtn.focus();
+  }
+  cancelBtn.addEventListener("click", closeModal);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) {
+      closeModal();
+    }
+  });
+  confirmBtn.addEventListener("click", () => {
+    if (pendingStep == null) {
+      return;
+    }
+    const step = pendingStep;
+    closeModal();
+    void postWorkflow({ revertToUiStep: step });
+  });
+  document.addEventListener("keydown", (e) => {
+    if (overlay.hidden) {
+      return;
+    }
+    if (e.key !== "Escape") {
+      return;
+    }
+    e.preventDefault();
+    closeModal();
+  });
+  return openModal;
+}
+
+const openWorkflowRevertModal = wireWorkflowRevertModal();
 const EXPLORER_WIDTH_MIN = 200;
 const EXPLORER_WIDTH_MAX = 640;
 
@@ -28,7 +82,6 @@ const state = {
   vexSource: "",
   workflow: { approvalsByPath: {}, currentVexPath: "", phase: "spec" },
   workflowSelectedStep: 0,
-  hasSpokenToAssistant: false,
 };
 
 function clampExplorerWidthPx(w) {
@@ -79,9 +132,6 @@ function loadDashboardView() {
     if (typeof parsed.workflowSelectedStep === "number" && Number.isFinite(parsed.workflowSelectedStep)) {
       state.workflowSelectedStep = Math.max(0, Math.min(5, Math.floor(parsed.workflowSelectedStep)));
     }
-    if (typeof parsed.hasSpokenToAssistant === "boolean") {
-      state.hasSpokenToAssistant = parsed.hasSpokenToAssistant;
-    }
   } catch {
     /* ignore corrupt or unavailable storage */
   }
@@ -102,7 +152,7 @@ function syncLogicCanvasSpecEditClass() {
     return;
   }
   const specOk = state.parseResult?.ok === true;
-  const canSpecEdit = state.workflow.phase === "spec" && specOk && state.hasSpokenToAssistant;
+  const canSpecEdit = state.workflow.phase === "spec" && specOk;
   viewport.classList.toggle("logic-canvas--spec-edit", canSpecEdit);
   if (canvasHint != null && specOk) {
     const doc = state.parseResult?.document;
@@ -110,11 +160,8 @@ function syncLogicCanvasSpecEditClass() {
     if (fn != null) {
       const hasWhens = Array.isArray(fn.whens) && fn.whens.length > 0;
       if (hasWhens) {
-        if (state.workflow.phase === "spec" && state.hasSpokenToAssistant) {
+        if (state.workflow.phase === "spec") {
           canvasHint.textContent = "Click a node to edit its label · scroll to zoom · drag empty space to pan";
-        } else if (state.workflow.phase === "spec") {
-          canvasHint.textContent =
-            "Use the assistant to describe work across .vex files · scroll to zoom · drag empty space to pan";
         } else {
           canvasHint.textContent = "Scroll to zoom · drag empty space to pan";
         }
@@ -129,7 +176,10 @@ async function fetchWorkflow() {
     setWorkflowStatus("Could not load workflow state.", true);
     return;
   }
-  state.workflow = await res.json();
+  const raw = await res.json();
+  const wf = { ...raw };
+  delete wf.__client;
+  state.workflow = wf;
   setWorkflowStatus("");
   renderWorkflowBar();
 }
@@ -146,27 +196,25 @@ async function postWorkflow(body) {
     setWorkflowStatus(typeof data.message === "string" ? data.message : "Workflow update failed.", true);
     return false;
   }
-  state.workflow = data;
-  if (body.resetWorkflow === true) {
-    state.hasSpokenToAssistant = false;
-  }
-  if (data.phase !== prevPhase) {
+  const hints = data.__client;
+  const wf = { ...data };
+  delete wf.__client;
+  state.workflow = wf;
+  if (hints != null && typeof hints === "object") {
+    if (typeof hints.workflowSelectedStep === "number" && Number.isFinite(hints.workflowSelectedStep)) {
+      state.workflowSelectedStep = Math.max(0, Math.min(5, Math.floor(hints.workflowSelectedStep)));
+    }
+  } else if (data.phase !== prevPhase) {
     state.workflowSelectedStep = computeWorkflowProgressFromState();
-    saveDashboardView();
   }
   setWorkflowStatus("");
   renderWorkflowBar();
+  saveDashboardView();
   return true;
 }
 
 function computeWorkflowProgressIdx(input) {
-  const { allApproved, hasSpokenToAssistant, pathOk, phase } = input;
-  if (phase === "spec" && !hasSpokenToAssistant) {
-    return 0;
-  }
-  if (!pathOk) {
-    return 0;
-  }
+  const { allApproved, phase } = input;
   if (phase === "spec" && !allApproved) {
     return 1;
   }
@@ -182,19 +230,16 @@ function computeWorkflowProgressIdx(input) {
   if (phase === "done") {
     return 5;
   }
-  return 1;
+  return 0;
 }
 
 function computeWorkflowProgressFromState() {
-  const pathOk = state.currentPath != null && state.currentPath.length > 0;
   const doc = state.parseResult != null && state.parseResult.ok ? state.parseResult.document : null;
   const fnNames = doc != null && Array.isArray(doc.functions) ? doc.functions.map((f) => f.name) : [];
   const approved = new Set(state.workflow.approvalsByPath[state.currentPath ?? ""] ?? []);
   const allApproved = fnNames.length > 0 && fnNames.every((n) => approved.has(n));
   return computeWorkflowProgressIdx({
     allApproved,
-    hasSpokenToAssistant: state.hasSpokenToAssistant,
-    pathOk,
     phase: state.workflow.phase,
   });
 }
@@ -480,11 +525,34 @@ function renderWorkflowApprovals(fnNames) {
   });
 }
 
-function renderWorkflowBar() {
-  if (state.workflow.phase === "spec" && !state.hasSpokenToAssistant) {
-    state.workflowSelectedStep = 0;
+function renderWorkflowRevertRow() {
+  const row = document.getElementById("workflow-revert");
+  row.replaceChildren();
+  const current = computeWorkflowProgressFromState();
+  if (current <= 0) {
+    return;
   }
-  const pathOk = state.currentPath != null && state.currentPath.length > 0;
+  const lead = document.createElement("div");
+  lead.className = "workflow-revert-lead";
+  lead.textContent = "Go back to";
+  row.append(lead);
+  const group = document.createElement("div");
+  group.className = "workflow-revert-buttons";
+  row.append(group);
+  for (let i = 0; i < current; i += 1) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "workflow-btn workflow-btn-revert";
+    btn.textContent = WORKFLOW_STEP_LABELS[i];
+    const step = i;
+    btn.addEventListener("click", () => {
+      openWorkflowRevertModal(step);
+    });
+    group.append(btn);
+  }
+}
+
+function renderWorkflowBar() {
   const doc = state.parseResult != null && state.parseResult.ok ? state.parseResult.document : null;
   const fnNames = doc != null && Array.isArray(doc.functions) ? doc.functions.map((f) => f.name) : [];
   const approved = new Set(state.workflow.approvalsByPath[state.currentPath ?? ""] ?? []);
@@ -492,12 +560,11 @@ function renderWorkflowBar() {
   const phase = state.workflow.phase;
   const progressIdx = computeWorkflowProgressIdx({
     allApproved,
-    hasSpokenToAssistant: state.hasSpokenToAssistant,
-    pathOk,
     phase,
   });
 
   renderWorkflowStepper(progressIdx);
+  renderWorkflowRevertRow();
   renderWorkflowActions(fnNames, allApproved);
   renderWorkflowApprovals(fnNames);
   applyWorkflowPanelVisibility();
@@ -515,7 +582,6 @@ function saveDashboardView() {
       explorerWidthPx: typeof state.explorerWidthPx === "number" ? state.explorerWidthPx : null,
       selectedFnIndex: state.selectedFnIndex,
       workflowSelectedStep: state.workflowSelectedStep,
-      hasSpokenToAssistant: state.hasSpokenToAssistant,
     };
     localStorage.setItem(DASHBOARD_VIEW_STORAGE_KEY, JSON.stringify(payload));
   } catch {
@@ -677,7 +743,7 @@ function openVexNodeEditDialog(data) {
 }
 
 function onLogicNodeHitClick(data) {
-  if (state.workflow.phase !== "spec" || !state.hasSpokenToAssistant) {
+  if (state.workflow.phase !== "spec") {
     return;
   }
   if (state.currentPath == null || state.parseResult?.ok !== true) {
@@ -1044,7 +1110,7 @@ function renderLogicGraph(fn) {
   const viewport = document.getElementById("logic-canvas-viewport");
   viewport.classList.toggle(
     "logic-canvas--spec-edit",
-    state.workflow.phase === "spec" && state.parseResult?.ok === true && state.hasSpokenToAssistant,
+    state.workflow.phase === "spec" && state.parseResult?.ok === true,
   );
   svg.replaceChildren();
   const defs = document.createElementNS(NS, "defs");
@@ -1149,6 +1215,18 @@ function collapseAllExplorerFolders() {
   saveDashboardView();
 }
 
+async function treeHasRelativePath(nodes, relPath) {
+  if (!Array.isArray(nodes)) {
+    return false;
+  }
+  return nodes.some((node) => {
+    if (node.relativePath === relPath) {
+      return true;
+    }
+    return node.children != null && treeHasRelativePath(node.children, relPath);
+  });
+}
+
 async function refreshTree() {
   const res = await fetch("/api/tree");
   if (!res.ok) {
@@ -1179,8 +1257,14 @@ function updateMainPanel() {
 
     if (!state.parseResult.ok) {
       errBox.hidden = false;
-      const lines = state.parseResult.errors.map((e) => `Line ${String(e.line)}: ${e.message}`);
-      errBox.textContent = lines.join("\n");
+      const errs = state.parseResult.errors;
+      if (Array.isArray(errs) && errs.length > 0) {
+        errBox.textContent = errs.map((e) => `Line ${String(e.line)}: ${e.message}`).join("\n");
+      } else if (typeof state.parseResult.loadErrorMessage === "string") {
+        errBox.textContent = state.parseResult.loadErrorMessage;
+      } else {
+        errBox.textContent = "Document could not be loaded.";
+      }
       return;
     }
 
@@ -1219,9 +1303,7 @@ function updateMainPanel() {
     if (canvasHint != null) {
       const hasWhens = Array.isArray(fn.whens) && fn.whens.length > 0;
       if (hasWhens) {
-        if (state.workflow.phase === "spec" && state.hasSpokenToAssistant) {
-          canvasHint.textContent = "Click a node to edit its label · scroll to zoom · drag empty space to pan";
-        } else if (state.workflow.phase === "spec") {
+        if (state.workflow.phase === "spec") {
           canvasHint.textContent =
             "Use the assistant to describe work across .vex files · scroll to zoom · drag empty space to pan";
         } else {
@@ -1248,12 +1330,23 @@ async function openVexFile(relPath, options) {
   const params = new URLSearchParams({ path: relPath });
   const res = await fetch(`/api/document?${params.toString()}`);
   const data = await res.json();
-  state.vexSource = typeof data.source === "string" ? data.source : "";
-  state.parseResult = {
-    document: data.document,
-    errors: data.errors,
-    ok: data.ok,
-  };
+  if (res.ok) {
+    state.vexSource = typeof data.source === "string" ? data.source : "";
+    state.parseResult = {
+      document: data.document,
+      errors: Array.isArray(data.errors) ? data.errors : [],
+      ok: data.ok === true,
+    };
+  } else {
+    state.vexSource = "";
+    const msg = typeof data.message === "string" ? data.message : "Could not load document.";
+    state.parseResult = {
+      document: null,
+      errors: [],
+      loadErrorMessage: msg,
+      ok: false,
+    };
+  }
   if (res.ok) {
     const synced = await postWorkflow({ currentVexPath: relPath });
     if (!synced) {
@@ -1263,11 +1356,7 @@ async function openVexFile(relPath, options) {
     await fetchWorkflow();
   }
   if (pathChanged) {
-    if (state.hasSpokenToAssistant) {
-      state.workflowSelectedStep = computeWorkflowProgressFromState();
-    } else {
-      state.workflowSelectedStep = 0;
-    }
+    state.workflowSelectedStep = computeWorkflowProgressFromState();
     saveDashboardView();
   }
   updateMainPanel();
@@ -1403,12 +1492,10 @@ window.addEventListener("keydown", onExplorerHotkey);
 syncExplorerPanel();
 wireSidebarResize();
 
-await fetchWorkflow();
-await refreshTree();
-
-if (state.currentPath != null) {
-  await openVexFile(state.currentPath, { resetFunctionIndex: false });
-}
+initAssistantPanel({
+  saveDashboardView,
+  state,
+});
 
 function scheduleReloadFromWatch() {
   if (watchReloadTimer != null) {
@@ -1450,23 +1537,15 @@ function connectProjectWatch() {
 
 connectProjectWatch();
 
-initAssistantPanel({
-  getChatExtraFields() {
-    return {
-      currentVexPath: state.workflow.currentVexPath,
-      hasSpokenToAssistant: state.hasSpokenToAssistant,
-      workflowPhase: state.workflow.phase,
-    };
-  },
-  onUserMessageSent() {
-    if (state.hasSpokenToAssistant) {
-      return;
-    }
-    state.hasSpokenToAssistant = true;
+void (async () => {
+  await fetchWorkflow();
+  await refreshTree();
+  if (state.currentPath != null && !treeHasRelativePath(state.tree, state.currentPath)) {
+    state.currentPath = null;
+    state.parseResult = null;
     saveDashboardView();
-    state.workflowSelectedStep = computeWorkflowProgressFromState();
-    renderWorkflowBar();
-  },
-  saveDashboardView,
-  state,
-});
+  }
+  if (state.currentPath != null) {
+    await openVexFile(state.currentPath, { resetFunctionIndex: false });
+  }
+})();

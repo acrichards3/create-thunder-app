@@ -3,7 +3,7 @@ import { realpath } from "bun:fs/promises";
 import { dirname, join } from "bun:path";
 import { tryCatchAsync } from "@vex-app/lib";
 
-export type ResolveSafeVexPathResult = { absolutePath: string; kind: "ok" } | { kind: "error"; message: string };
+type ResolveSafeVexPathResult = { absolutePath: string; kind: "ok" } | { kind: "error"; message: string };
 
 function splitPathSegments(raw: string): string[] {
   return raw.split("/").filter((s) => s.length > 0 && s !== ".");

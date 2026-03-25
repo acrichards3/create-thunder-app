@@ -2,21 +2,13 @@ import { parseAndValidateVexDocument } from "../vex/parse-and-validate-vex-docum
 import { getAssistantStatusResponse, postAssistantChat } from "./assistant-chat-route";
 import { buildDashboardFileTree } from "./build-file-tree";
 import { serveCodegenSpec } from "./codegen-spec-route";
+import { jsonResponse } from "./dashboard-helpers.js";
 import { servePutDocument, serveSerializeVexDocument } from "./document-routes";
 import { resolveSafeVexPath } from "./resolve-safe-vex-path";
 import { serveRunSpecTests } from "./run-spec-tests-route";
 import { serveVerifyPair } from "./verify-pair-route";
-import { getWorkflowHttp, postWorkflowHttp } from "./workflow-http";
-import { postWorkflowVerifyRun } from "./verify-workflow-route";
 
 type Hit = { matched: boolean; value: Response | null };
-
-function jsonResponse(data: unknown, status: number): Response {
-  return new Response(JSON.stringify(data), {
-    headers: { "Content-Type": "application/json; charset=utf-8" },
-    status,
-  });
-}
 
 async function serveDocumentGet(input: { pathParam: string | null; rootAbs: string }): Promise<Response> {
   const { pathParam, rootAbs } = input;
@@ -74,22 +66,13 @@ async function dispatchTreeDocumentApi(input: {
   return { matched: false, value: null };
 }
 
-async function dispatchWorkflowCodegenApi(input: {
+async function dispatchCodegenApi(input: {
   pathname: string;
   req: Request;
   rootAbs: string;
   searchParams: URLSearchParams;
 }): Promise<Hit> {
   const { pathname, req, rootAbs, searchParams } = input;
-  if (pathname === "/api/workflow" && req.method === "GET") {
-    return { matched: true, value: await getWorkflowHttp(rootAbs) };
-  }
-  if (pathname === "/api/workflow" && req.method === "POST") {
-    return { matched: true, value: await postWorkflowHttp(req, rootAbs) };
-  }
-  if (pathname === "/api/workflow/verify-run" && req.method === "POST") {
-    return { matched: true, value: await postWorkflowVerifyRun(rootAbs) };
-  }
   if (pathname === "/api/verify-pair" && req.method === "GET") {
     return { matched: true, value: await serveVerifyPair({ pathParam: searchParams.get("path"), rootAbs }) };
   }
@@ -120,7 +103,7 @@ export async function dispatchDashboardApi(input: {
     return treeDoc.value;
   }
 
-  const rest = await dispatchWorkflowCodegenApi({ pathname, req, rootAbs, searchParams });
+  const rest = await dispatchCodegenApi({ pathname, req, rootAbs, searchParams });
   if (rest.matched) {
     return rest.value;
   }

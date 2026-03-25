@@ -1,21 +1,11 @@
 import { watch } from "bun:fs";
-import { IGNORED_DASHBOARD_DIR_NAMES } from "./ignored-dashboard-dir-names";
-
-function pathContainsIgnoredSegment(relPath: string): boolean {
-  const parts = relPath.split(/[/\\]/);
-  return parts.some((p) => IGNORED_DASHBOARD_DIR_NAMES.has(p));
-}
 
 function isVexRelatedChange(filename: string | Buffer | null): boolean {
   if (filename == null) {
     return true;
   }
   const name = typeof filename === "string" ? filename : filename.toString("utf8");
-  const norm = name.replace(/\\/g, "/");
-  if (pathContainsIgnoredSegment(norm)) {
-    return false;
-  }
-  return norm.endsWith(".vex");
+  return name.replace(/\\/g, "/").endsWith(".vex");
 }
 
 export function startDashboardFileWatch(input: {

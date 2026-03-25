@@ -42,6 +42,7 @@
     "backend/eslint.config.js",
     "backend/bunfig.toml",
     "backend/.env.example",
+    ".env.example",
     "frontend/src",
     "frontend/public",
     "frontend/index.html",

@@ -16,7 +16,7 @@ function parseDashboardPort(argv: string[]): number {
   return port;
 }
 
-export function runDashboardCommand(argv: string[]): void {
+export async function runDashboardCommand(argv: string[]): Promise<void> {
   const port = parseDashboardPort(argv);
-  startDashboard({ cwd: getCwd(), port });
+  await startDashboard({ cwd: getCwd(), port });
 }

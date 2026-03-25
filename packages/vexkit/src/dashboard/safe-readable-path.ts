@@ -8,7 +8,7 @@ import {
   splitPathSegments,
 } from "./assistant-repo-path.js";
 
-export type SafeReadableResult = { absolutePath: string; kind: "ok" } | { kind: "error"; message: string };
+type SafeReadableResult = { absolutePath: string; kind: "ok" } | { kind: "error"; message: string };
 
 export async function resolveReadablePathUnderRoot(input: {
   rawRelativePath: string;

@@ -2,18 +2,8 @@ import { tryCatchAsync } from "@vex-app/lib";
 import { generateSpecTsFromVexDocument } from "../spec-pair/codegen-spec-ts";
 import { pairedSpecRelativePath } from "../spec-pair/spec-step-shape";
 import { parseAndValidateVexDocument } from "../vex/parse-and-validate-vex-document";
+import { isRecord, jsonResponse } from "./dashboard-helpers.js";
 import { resolveSafeSpecWritePath, resolveSafeVexPath } from "./resolve-safe-vex-path";
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
-}
-
-function jsonResponse(data: unknown, status: number): Response {
-  return new Response(JSON.stringify(data), {
-    headers: { "Content-Type": "application/json; charset=utf-8" },
-    status,
-  });
-}
 
 export async function serveCodegenSpec(input: { req: Request; rootAbs: string }): Promise<Response> {
   const [rawBody, bodyErr] = await tryCatchAsync(async () => input.req.json());

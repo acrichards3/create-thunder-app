@@ -1,5 +1,70 @@
+import DOMPurify from "https://cdn.jsdelivr.net/npm/dompurify@3.2.6/+esm";
+import { marked } from "https://cdn.jsdelivr.net/npm/marked@15.0.6/+esm";
+import { finalizeAssistantVisibleText } from "./strip-assistant-visible-text.js?v=5";
+
 const ASSISTANT_WIDTH_MIN = 260;
 const ASSISTANT_WIDTH_MAX = 560;
+
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+});
+
+DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+  if (node.tagName === "A" && node instanceof Element) {
+    node.setAttribute("rel", "noopener noreferrer");
+    node.setAttribute("target", "_blank");
+  }
+});
+
+const ASSISTANT_MD_PURIFY = {
+  ADD_ATTR: ["class"],
+  ADD_TAGS: ["div"],
+};
+
+function wrapAssistantQuestionsSectionHtml(html) {
+  const re = /<h2[^>]*>\s*(?:Questions for you|Questions)\s*<\/h2>/i;
+  const m = re.exec(html);
+  if (m == null || m.index === undefined) {
+    return html;
+  }
+  const start = m.index;
+  return `${html.slice(0, start)}<div class="assistant-questions">${html.slice(start)}</div>`;
+}
+
+function parseNdjsonErrorMessage(errText) {
+  const first = errText.trim().split("\n")[0] ?? "";
+  if (first.length === 0) {
+    return "";
+  }
+  try {
+    const ev = JSON.parse(first);
+    if (ev && typeof ev.type === "string" && ev.type === "error" && typeof ev.message === "string") {
+      return ev.message;
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+function assistantMarkdownToSafeHtml(markdown) {
+  const withoutMarker = finalizeAssistantVisibleText(markdown);
+  const raw = marked.parse(withoutMarker);
+  const html = typeof raw === "string" ? raw : "";
+  const wrapped = wrapAssistantQuestionsSectionHtml(html);
+  return DOMPurify.sanitize(wrapped, ASSISTANT_MD_PURIFY);
+}
+
+function fillAssistantMessageBody(bodyEl, content, useMarkdown) {
+  bodyEl.classList.remove("assistant-msg-body--md");
+  if (useMarkdown) {
+    bodyEl.classList.add("assistant-msg-body--md");
+    bodyEl.innerHTML = assistantMarkdownToSafeHtml(content);
+    return;
+  }
+  bodyEl.textContent = content;
+}
 
 function clampAssistantWidthPx(w) {
   return Math.min(ASSISTANT_WIDTH_MAX, Math.max(ASSISTANT_WIDTH_MIN, Math.round(w)));
@@ -111,14 +176,24 @@ function renderChatMessages(container, messages) {
   container.replaceChildren();
   messages.forEach((m, i) => {
     const row = document.createElement("div");
+    const isErr = m.error === true;
     row.className = `assistant-msg assistant-msg-${m.role}`;
+    if (isErr) {
+      row.classList.add("assistant-msg--error");
+    }
     row.dataset.index = String(i);
     const label = document.createElement("div");
     label.className = "assistant-msg-label";
-    label.textContent = m.role === "user" ? "You" : "Assistant";
+    if (m.role === "user") {
+      label.textContent = "You";
+    } else if (isErr) {
+      label.textContent = "Error";
+    } else {
+      label.textContent = "Assistant";
+    }
     const body = document.createElement("div");
     body.className = "assistant-msg-body";
-    body.textContent = m.content;
+    fillAssistantMessageBody(body, m.content, m.role === "assistant");
     row.append(label, body);
     container.append(row);
   });
@@ -126,7 +201,7 @@ function renderChatMessages(container, messages) {
 }
 
 export function initAssistantPanel(input) {
-  const { getChatExtraFields, onUserMessageSent, saveDashboardView, state } = input;
+  const { saveDashboardView, state } = input;
   const messages = [];
   const listEl = document.getElementById("assistant-messages");
   const form = document.getElementById("assistant-form");
@@ -136,40 +211,83 @@ export function initAssistantPanel(input) {
   applyAssistantWidthFromState(state);
   syncAssistantPanel(state);
 
+  let thinkingTimer = null;
+
+  function clearThinkingAnimation() {
+    if (thinkingTimer != null) {
+      window.clearInterval(thinkingTimer);
+      thinkingTimer = null;
+    }
+    statusEl.classList.remove("assistant-status--thinking");
+    statusEl.removeAttribute("aria-busy");
+  }
+
   function setStatus(text) {
+    clearThinkingAnimation();
+    statusEl.classList.remove("assistant-status--error");
     statusEl.textContent = text;
   }
 
+  function setStatusError(text) {
+    clearThinkingAnimation();
+    statusEl.classList.remove("assistant-status--thinking");
+    statusEl.classList.add("assistant-status--error");
+    statusEl.removeAttribute("aria-busy");
+    statusEl.textContent = text;
+  }
+
+  function setThinking() {
+    if (thinkingTimer != null) {
+      window.clearInterval(thinkingTimer);
+      thinkingTimer = null;
+    }
+    statusEl.classList.remove("assistant-status--error");
+    statusEl.classList.add("assistant-status--thinking");
+    statusEl.setAttribute("aria-busy", "true");
+    let phase = 0;
+    const suffixes = ["", ".", "..", "..."];
+    function tick() {
+      statusEl.textContent = `Thinking${suffixes[phase]}`;
+      phase = (phase + 1) % suffixes.length;
+    }
+    tick();
+    thinkingTimer = window.setInterval(tick, 420);
+  }
+
+  let cachedStatusLine = "";
+
+  function restoreIdleStatus() {
+    setStatus(cachedStatusLine.length > 0 ? cachedStatusLine : "Cursor agent");
+  }
+
   async function refreshStatus() {
-    const res = await fetch("/api/assistant/status");
-    if (!res.ok) {
-      setStatus("Status unavailable.");
-      return;
+    try {
+      const res = await fetch("/api/assistant/status");
+      if (!res.ok) {
+        setStatusError("Status unavailable.");
+        return;
+      }
+      const data = await res.json();
+      const parts = [];
+      if (data.cursorConfigured) {
+        parts.push("Cursor agent ready");
+      } else {
+        parts.push("Set VEXKIT_USE_CURSOR_AGENT=1 + CURSOR_API_KEY");
+      }
+      if (data.mcpConfigured) {
+        parts.push("MCP configured");
+      }
+      cachedStatusLine = parts.join(" · ");
+      setStatus(cachedStatusLine);
+    } catch {
+      setStatusError("Could not load assistant status.");
     }
-    const data = await res.json();
-    const parts = [];
-    if (data.useCursorAgent) {
-      parts.push("Cursor agent (ACP)");
-    } else if (data.hasChatKey) {
-      parts.push(`Model: ${data.model}`);
-    } else {
-      parts.push("Set VEXKIT_CHAT_API_KEY or VEXKIT_USE_CURSOR_AGENT=1 + CURSOR_API_KEY");
-    }
-    if (data.mcpConfigured) {
-      parts.push("MCP configured");
-    }
-    if (data.repoAgentTools) {
-      parts.push("Repo agent tools");
-    }
-    setStatus(parts.join(" · "));
   }
 
   function buildPayload() {
-    const base = {
+    return {
       messages: messages.map((m) => ({ content: m.content, role: m.role })),
     };
-    const extra = typeof getChatExtraFields === "function" ? getChatExtraFields() : {};
-    return { ...base, ...extra };
   }
 
   function onSubmit(ev) {
@@ -196,71 +314,117 @@ export function initAssistantPanel(input) {
   }
 
   async function sendChatRequest(payload) {
-    setStatus("Thinking…");
-    messages.push({ content: "", role: "assistant" });
+    let statusErrorShown = false;
+    function chatStatusError(msg) {
+      statusErrorShown = true;
+      setStatusError(msg);
+    }
+
+    setThinking();
+    messages.push({ content: "", role: "assistant", error: false });
     renderChatMessages(listEl, messages);
     const assistantIdx = messages.length - 1;
 
-    const res = await fetch("/api/assistant/chat", {
-      body: JSON.stringify(payload),
-      headers: { "Content-Type": "application/json" },
-      method: "POST",
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      messages[assistantIdx].content = `Request failed (${String(res.status)}): ${errText}`;
-      renderChatMessages(listEl, messages);
-      void refreshStatus();
-      return;
-    }
-
-    const reader = res.body?.getReader();
-    if (reader == null) {
-      messages[assistantIdx].content = "Empty response.";
-      renderChatMessages(listEl, messages);
-      return;
-    }
-
-    const dec = new TextDecoder();
-    let carry = "";
-    let acc = "";
-    let sawStreamError = false;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-      carry += dec.decode(value, { stream: true });
-      const lines = carry.split("\n");
-      carry = lines.pop() ?? "";
-      lines.forEach((line) => {
-        const t = line.trim();
-        if (t.length === 0) {
-          return;
-        }
-        let ev;
-        try {
-          ev = JSON.parse(t);
-        } catch {
-          return;
-        }
-        if (ev.type === "delta" && typeof ev.text === "string") {
-          acc += ev.text;
-          messages[assistantIdx].content = acc;
-          renderChatMessages(listEl, messages);
-        }
-        if (ev.type === "error" && typeof ev.message === "string") {
-          sawStreamError = true;
-          acc += `\n${ev.message}`;
-          messages[assistantIdx].content = acc;
-          renderChatMessages(listEl, messages);
-        }
+    try {
+      const res = await fetch("/api/assistant/chat", {
+        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
       });
-    }
-    void refreshStatus();
-    if (!sawStreamError && typeof onUserMessageSent === "function") {
-      onUserMessageSent();
+
+      if (!res.ok) {
+        const errText = await res.text();
+        const parsedMsg = parseNdjsonErrorMessage(errText);
+        const body = parsedMsg.length > 0 ? parsedMsg : `Request failed (${String(res.status)}): ${errText}`;
+        messages[assistantIdx].content = body;
+        messages[assistantIdx].error = true;
+        renderChatMessages(listEl, messages);
+        chatStatusError(parsedMsg.length > 0 ? parsedMsg : `Chat request failed (${String(res.status)}).`);
+        return;
+      }
+
+      const reader = res.body?.getReader();
+      if (reader == null) {
+        messages[assistantIdx].content = "Empty response from server (no body).";
+        messages[assistantIdx].error = true;
+        renderChatMessages(listEl, messages);
+        chatStatusError("Empty response from server.");
+        return;
+      }
+
+      const dec = new TextDecoder();
+      let carry = "";
+      let acc = "";
+      let sawStreamError = false;
+      let sawAssistantOutput = false;
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+          carry += dec.decode(value, { stream: true });
+          const lines = carry.split("\n");
+          carry = lines.pop() ?? "";
+          lines.forEach((line) => {
+            const t = line.trim();
+            if (t.length === 0) {
+              return;
+            }
+            let ev;
+            try {
+              ev = JSON.parse(t);
+            } catch {
+              return;
+            }
+            if (ev.type === "delta" && typeof ev.text === "string") {
+              if (!sawAssistantOutput) {
+                sawAssistantOutput = true;
+                restoreIdleStatus();
+              }
+              acc += ev.text;
+              messages[assistantIdx].content = finalizeAssistantVisibleText(acc);
+              renderChatMessages(listEl, messages);
+            }
+            if (ev.type === "error" && typeof ev.message === "string") {
+              sawStreamError = true;
+              if (!sawAssistantOutput) {
+                sawAssistantOutput = true;
+                restoreIdleStatus();
+              }
+              acc += `\n${ev.message}`;
+              messages[assistantIdx].content = finalizeAssistantVisibleText(acc);
+              messages[assistantIdx].error = true;
+              renderChatMessages(listEl, messages);
+              chatStatusError("Assistant reported an error.");
+            }
+          });
+        }
+      } catch (readErr) {
+        sawStreamError = true;
+        const detail = readErr instanceof Error ? readErr.message : String(readErr);
+        messages[assistantIdx].content = finalizeAssistantVisibleText(
+          acc.length > 0 ? `${acc}\n\n(Stream interrupted: ${detail})` : `Stream interrupted: ${detail}`,
+        );
+        messages[assistantIdx].error = true;
+        renderChatMessages(listEl, messages);
+        chatStatusError("Connection to assistant was interrupted.");
+      }
+      if (!sawAssistantOutput && !sawStreamError && acc.length === 0) {
+        messages[assistantIdx].content =
+          "No response was received. The server may have closed the stream early (check the terminal running vexkit).";
+        messages[assistantIdx].error = true;
+        renderChatMessages(listEl, messages);
+        chatStatusError("No assistant output received.");
+      }
+      if (!sawStreamError && sawAssistantOutput) {
+        messages[assistantIdx].content = finalizeAssistantVisibleText(acc);
+        renderChatMessages(listEl, messages);
+      }
+    } finally {
+      if (!statusErrorShown) {
+        restoreIdleStatus();
+      }
     }
   }
 

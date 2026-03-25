@@ -2,24 +2,8 @@ import { tryCatchAsync } from "@vex-app/lib";
 import { parseAndValidateVexDocument } from "../vex/parse-and-validate-vex-document";
 import { serializeVexDocument } from "../vex/serialize-vex-document";
 import { vexDocumentFromUnknown } from "../vex/vex-document-from-json";
+import { isRecord, jsonResponse } from "./dashboard-helpers.js";
 import { resolveSafeVexWritePath } from "./resolve-safe-vex-path";
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  if (typeof v !== "object") {
-    return false;
-  }
-  if (v === null) {
-    return false;
-  }
-  return true;
-}
-
-function jsonResponse(data: unknown, status: number): Response {
-  return new Response(JSON.stringify(data), {
-    headers: { "Content-Type": "application/json; charset=utf-8" },
-    status,
-  });
-}
 
 type PutSourceOutcome = { response: Response | null; source: string };
 

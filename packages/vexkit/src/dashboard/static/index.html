@@ -60,6 +60,26 @@
         overflow-y: auto;
         padding: 0.35rem 0.85rem 0.45rem;
       }
+      .workflow-revert-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        padding: 0 0.85rem 0.45rem;
+      }
+      .workflow-revert-lead {
+        color: var(--muted);
+        font-size: 0.6rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .workflow-revert-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+      .workflow-btn-revert {
+        font-size: 0.68rem;
+      }
       #assistant-panel .stepper-node {
         font-size: 0.5rem;
       }
@@ -293,6 +313,77 @@
         position: fixed;
         z-index: 200;
       }
+      .workflow-revert-modal-overlay {
+        align-items: center;
+        backdrop-filter: blur(6px);
+        background: rgb(0 0 0 / 0.58);
+        display: flex;
+        inset: 0;
+        justify-content: center;
+        padding: 1rem;
+        position: fixed;
+        z-index: 210;
+      }
+      .workflow-revert-modal-overlay[hidden] {
+        display: none;
+      }
+      .workflow-revert-modal-dialog {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 20px 56px rgb(0 0 0 / 0.5);
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        max-width: min(100%, 26rem);
+        padding: 1.1rem 1.15rem;
+        width: 100%;
+      }
+      .workflow-revert-modal-title {
+        color: var(--text);
+        font-size: 0.98rem;
+        font-weight: 600;
+        line-height: 1.35;
+      }
+      .workflow-revert-modal-body {
+        color: var(--muted);
+        font-size: 0.8125rem;
+        line-height: 1.5;
+      }
+      .workflow-revert-modal-actions {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        justify-content: flex-end;
+        padding-top: 0.15rem;
+      }
+      .workflow-revert-modal-btn {
+        border-radius: 6px;
+        cursor: pointer;
+        flex-shrink: 0;
+        font: inherit;
+        font-size: 0.8125rem;
+        padding: 0.4rem 0.85rem;
+      }
+      .workflow-revert-modal-btn--secondary {
+        background: rgb(255 255 255 / 0.06);
+        border: 1px solid var(--border);
+        color: var(--text);
+      }
+      .workflow-revert-modal-btn--secondary:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .workflow-revert-modal-btn--danger {
+        background: rgb(224 112 112 / 0.16);
+        border: 1px solid rgb(224 112 112 / 0.5);
+        color: #f0c4c4;
+      }
+      .workflow-revert-modal-btn--danger:hover {
+        background: rgb(224 112 112 / 0.26);
+        border-color: rgb(224 112 112 / 0.65);
+      }
       .vex-node-edit-overlay[hidden] {
         display: none;
       }
@@ -390,6 +481,16 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      .header-doc-link {
+        color: var(--accent);
+        flex-shrink: 0;
+        font-size: 0.8rem;
+        font-weight: 500;
+        text-decoration: none;
+      }
+      .header-doc-link:hover {
+        text-decoration: underline;
+      }
       #layout {
         flex: 1;
         display: flex;
@@ -480,8 +581,100 @@
         line-height: 1.45;
         white-space: pre-wrap;
       }
+      .assistant-msg-body.assistant-msg-body--md {
+        white-space: normal;
+        word-break: break-word;
+      }
+      .assistant-msg-body--md > * + * {
+        margin-top: 0.45rem;
+      }
+      .assistant-msg-body--md :where(h1, h2, h3, h4) {
+        font-size: 0.875rem;
+        font-weight: 600;
+        line-height: 1.35;
+      }
+      .assistant-msg-body--md .assistant-questions {
+        background: rgb(91 159 212 / 0.1);
+        border: 1px solid rgb(91 159 212 / 0.42);
+        border-radius: 8px;
+        padding: 0.45rem 0.55rem 0.5rem;
+      }
+      .assistant-msg-body--md .assistant-questions :where(h1, h2, h3, h4) {
+        color: var(--accent);
+        font-size: 0.8125rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+      .assistant-msg-body--md .assistant-questions ul,
+      .assistant-msg-body--md .assistant-questions ol {
+        padding-inline-start: 1.1rem;
+      }
+      .assistant-msg-body--md .assistant-questions li {
+        padding-left: 0.1rem;
+      }
+      .assistant-msg-body--md ul,
+      .assistant-msg-body--md ol {
+        padding-inline-start: 1.15rem;
+      }
+      .assistant-msg-body--md li {
+        padding-left: 0.15rem;
+      }
+      .assistant-msg-body--md blockquote {
+        border-left: 2px solid var(--accent);
+        color: var(--muted);
+        padding-left: 0.5rem;
+      }
+      .assistant-msg-body--md hr {
+        border: none;
+        border-top: 1px solid var(--border);
+      }
+      .assistant-msg-body--md pre {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-size: 0.75rem;
+        line-height: 1.4;
+        max-height: 12rem;
+        overflow: auto;
+        padding: 0.4rem 0.5rem;
+      }
+      .assistant-msg-body--md :not(pre) > code {
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 3px;
+        font-size: 0.78em;
+        padding: 0.1em 0.2em;
+      }
+      .assistant-msg-body--md a {
+        color: var(--accent);
+      }
+      .assistant-msg-body--md table {
+        border-collapse: collapse;
+        display: block;
+        font-size: 0.75rem;
+        line-height: 1.35;
+        max-width: 100%;
+        overflow-x: auto;
+      }
+      .assistant-msg-body--md th,
+      .assistant-msg-body--md td {
+        border: 1px solid var(--border);
+        padding: 0.2rem 0.35rem;
+      }
       .assistant-msg-user .assistant-msg-body {
         color: var(--accent);
+      }
+      .assistant-msg--error {
+        background: rgb(224 112 112 / 0.1);
+        border: 1px solid rgb(224 112 112 / 0.45);
+        border-radius: 6px;
+        padding: 0.45rem 0.55rem;
+      }
+      .assistant-msg--error .assistant-msg-label {
+        color: var(--err);
+        font-weight: 600;
+      }
+      .assistant-msg--error .assistant-msg-body {
+        color: #f0b4b4;
       }
       .assistant-form {
         border-top: 1px solid var(--border);
@@ -525,6 +718,34 @@
         color: var(--muted);
         font-size: 0.65rem;
         min-height: 1rem;
+      }
+      .assistant-status--error {
+        background: rgb(224 112 112 / 0.12);
+        border: 1px solid rgb(224 112 112 / 0.5);
+        border-radius: 5px;
+        color: #f0b4b4;
+        font-size: 0.72rem;
+        font-weight: 600;
+        padding: 0.35rem 0.45rem;
+      }
+      @keyframes assistant-thinking-breathe {
+        0%,
+        100% {
+          opacity: 0.55;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+      .assistant-status--thinking {
+        animation: assistant-thinking-breathe 1.15s ease-in-out infinite;
+        color: var(--accent);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .assistant-status--thinking {
+          animation: none;
+          opacity: 1;
+        }
       }
       .assistant-resize-handle {
         background: var(--panel);
@@ -805,6 +1026,7 @@
         ⟨
       </button>
       <span class="header-root" id="header-root">Loading project…</span>
+      <a class="header-doc-link" href="/docs">Docs</a>
       <span class="header-fill" aria-hidden="true"></span>
       <button
         aria-controls="assistant-shell"
@@ -912,6 +1134,7 @@
                 <nav aria-label="Spec workflow steps" class="stepper-nodes" id="workflow-stepper" role="tablist"></nav>
               </div>
             </div>
+            <div class="workflow-revert-wrap" id="workflow-revert"></div>
             <div class="workflow-panels" id="workflow-panels">
               <div
                 aria-labelledby="workflow-tab-0"
@@ -1020,6 +1243,35 @@
       </div>
     </div>
     <div
+      aria-labelledby="workflow-revert-modal-title"
+      aria-modal="true"
+      class="workflow-revert-modal-overlay"
+      hidden
+      id="workflow-revert-modal-overlay"
+      role="dialog"
+    >
+      <div class="workflow-revert-modal-dialog">
+        <div class="workflow-revert-modal-title" id="workflow-revert-modal-title">Revert workflow?</div>
+        <p class="workflow-revert-modal-body" id="workflow-revert-modal-body"></p>
+        <div class="workflow-revert-modal-actions">
+          <button
+            class="workflow-revert-modal-btn workflow-revert-modal-btn--secondary"
+            id="workflow-revert-modal-cancel"
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            class="workflow-revert-modal-btn workflow-revert-modal-btn--danger"
+            id="workflow-revert-modal-confirm"
+            type="button"
+          >
+            Revert
+          </button>
+        </div>
+      </div>
+    </div>
+    <div
       aria-labelledby="vex-node-edit-title"
       aria-modal="true"
       class="vex-node-edit-overlay"
@@ -1039,6 +1291,6 @@
         </div>
       </form>
     </div>
-    <script src="/app.js" type="module"></script>
+    <script src="/app.js?v=5" type="module"></script>
   </body>
 </html>

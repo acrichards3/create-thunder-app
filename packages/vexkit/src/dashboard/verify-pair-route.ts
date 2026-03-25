@@ -1,14 +1,8 @@
 import { validateVexSpecPair } from "../spec-pair/validate-vex-spec-pair";
 import { pairedSpecRelativePath } from "../spec-pair/spec-step-shape";
+import { jsonResponse } from "./dashboard-helpers.js";
 import { resolveSafeVexPath } from "./resolve-safe-vex-path";
 import { resolveReadablePathUnderRoot } from "./safe-readable-path";
-
-function jsonResponse(data: unknown, status: number): Response {
-  return new Response(JSON.stringify(data), {
-    headers: { "Content-Type": "application/json; charset=utf-8" },
-    status,
-  });
-}
 
 export async function serveVerifyPair(input: { pathParam: string | null; rootAbs: string }): Promise<Response> {
   const { pathParam, rootAbs } = input;

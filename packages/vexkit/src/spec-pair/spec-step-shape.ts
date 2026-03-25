@@ -1,6 +1,6 @@
 import type { VexBody, VexFunction } from "../vex/ast";
 
-export type SpecStepTag = "and" | "it" | "when";
+type SpecStepTag = "and" | "it" | "when";
 
 export type SpecStep = {
   key: string;

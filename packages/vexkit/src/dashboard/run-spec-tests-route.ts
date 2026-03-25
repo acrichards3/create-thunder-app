@@ -2,18 +2,8 @@ import { relative } from "bun:path";
 import { tryCatchAsync } from "@vex-app/lib";
 import { pairedSpecRelativePath } from "../spec-pair/spec-step-shape";
 import { specSourceContainsItTodo } from "../spec-pair/scan-it-todo";
+import { isRecord, jsonResponse } from "./dashboard-helpers.js";
 import { resolveReadablePathUnderRoot } from "./safe-readable-path";
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
-}
-
-function jsonResponse(data: unknown, status: number): Response {
-  return new Response(JSON.stringify(data), {
-    headers: { "Content-Type": "application/json; charset=utf-8" },
-    status,
-  });
-}
 
 export async function serveRunSpecTests(input: { req: Request; rootAbs: string }): Promise<Response> {
   const [rawBody, bodyErr] = await tryCatchAsync(async () => input.req.json());

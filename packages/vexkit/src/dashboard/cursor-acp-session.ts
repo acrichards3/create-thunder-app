@@ -1,10 +1,28 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { which } from "bun";
 import { tryCatch, tryCatchAsync } from "@vex-app/lib";
-import { buildPermissionRpcResult, shouldAllowCursorPermission } from "./cursor-acp-permission.js";
-import type { WorkflowPhase } from "./workflow-store.js";
+import { isRecord } from "./dashboard-helpers.js";
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
+function isNonTextContentBlockType(t: unknown): boolean {
+  if (typeof t !== "string" || t.length === 0) {
+    return false;
+  }
+  return t !== "text";
+}
+
+function textFromContentBlock(content: unknown): string {
+  if (!isRecord(content)) {
+    return "";
+  }
+  if (isNonTextContentBlockType(content.type)) {
+    return "";
+  }
+  const text = content.text;
+  if (typeof text === "string") {
+    return text;
+  }
+  return "";
 }
 
 function extractDeltaFromUpdateParams(params: unknown): string {
@@ -15,15 +33,30 @@ function extractDeltaFromUpdateParams(params: unknown): string {
   if (!isRecord(update)) {
     return "";
   }
-  const content = update.content;
-  if (isRecord(content) && typeof content.text === "string") {
-    return content.text;
-  }
   const sessionUpdate = update.sessionUpdate;
-  if (sessionUpdate === "agent_message_chunk" && isRecord(content) && typeof content.text === "string") {
-    return content.text;
+  if (sessionUpdate === "plan") {
+    return "";
   }
-  return "";
+  const rawContent = update.content;
+  if (rawContent == null) {
+    return "";
+  }
+  if (Array.isArray(rawContent)) {
+    let out = "";
+    for (let i = 0; i < rawContent.length; i += 1) {
+      out += textFromContentBlock(rawContent[i]);
+    }
+    return out;
+  }
+  return textFromContentBlock(rawContent);
+}
+
+function defaultAgentPathCandidates(): string[] {
+  const home = Bun.env.HOME;
+  if (typeof home !== "string" || home.length === 0) {
+    return [];
+  }
+  return [`${home}/.local/bin/agent`, `${home}/.cursor/bin/agent`];
 }
 
 function getCursorAgentBin(): string {
@@ -31,16 +64,23 @@ function getCursorAgentBin(): string {
   if (typeof raw === "string" && raw.length > 0) {
     return raw;
   }
+  const fromPath = which("agent");
+  if (fromPath != null) {
+    return fromPath;
+  }
+  const candidates = defaultAgentPathCandidates();
+  for (let i = 0; i < candidates.length; i += 1) {
+    const p = candidates[i];
+    if (existsSync(p)) {
+      return p;
+    }
+  }
   return "agent";
 }
 
 export function isCursorAgentConfigured(): boolean {
   const key = Bun.env.CURSOR_API_KEY;
   return typeof key === "string" && key.length > 0;
-}
-
-export function shouldUseCursorAgent(): boolean {
-  return Bun.env.VEXKIT_USE_CURSOR_AGENT === "1" && isCursorAgentConfigured();
 }
 
 type PendingMap = Map<number, { reject: (e: Error) => void; resolve: (v: unknown) => void }>;
@@ -71,7 +111,6 @@ function resolveJsonRpcResponse(parsed: Record<string, unknown>, pending: Pendin
 type StreamCtx = {
   accumulated: string;
   onDelta?: (text: string) => void;
-  phase: WorkflowPhase;
   sendLine: (obj: Record<string, unknown>) => void;
   streamedCharCount: number;
 };
@@ -91,14 +130,10 @@ function handlePermissionRequest(parsed: Record<string, unknown>, ctx: StreamCtx
   if (typeof rpcId !== "number") {
     return;
   }
-  const allow = shouldAllowCursorPermission({
-    params: parsed.params,
-    phase: ctx.phase,
-  });
   ctx.sendLine({
     id: rpcId,
     jsonrpc: "2.0",
-    result: buildPermissionRpcResult(allow),
+    result: { outcome: { optionId: "allow-once", outcome: "selected" } },
   });
 }
 
@@ -120,7 +155,6 @@ function processAcpLine(trimmed: string, pending: PendingMap, ctx: StreamCtx): v
 
 export async function runCursorAcpPrompt(input: {
   onDelta?: (text: string) => void;
-  phase: WorkflowPhase;
   promptText: string;
   rootAbs: string;
 }): Promise<{ fullText: string; ok: true } | { message: string; ok: false }> {
@@ -152,7 +186,6 @@ export async function runCursorAcpPrompt(input: {
   const streamCtx: StreamCtx = {
     accumulated: "",
     onDelta: input.onDelta,
-    phase: input.phase,
     sendLine,
     streamedCharCount: 0,
   };
