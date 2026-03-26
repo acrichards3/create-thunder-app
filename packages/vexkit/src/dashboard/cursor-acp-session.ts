@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { which } from "bun";
 import { tryCatch, tryCatchAsync } from "@vex-app/lib";
 import { isRecord } from "./dashboard-helpers.js";
+import { buildPermissionResult, shouldAllowPermission } from "./workflow-access.js";
 
 function isNonTextContentBlockType(t: unknown): boolean {
   if (typeof t !== "string" || t.length === 0) {
@@ -112,6 +113,7 @@ type StreamCtx = {
   accumulated: string;
   onDelta?: (text: string) => void;
   sendLine: (obj: Record<string, unknown>) => void;
+  step: number;
   streamedCharCount: number;
 };
 
@@ -130,10 +132,29 @@ function handlePermissionRequest(parsed: Record<string, unknown>, ctx: StreamCtx
   if (typeof rpcId !== "number") {
     return;
   }
+  const allow = shouldAllowPermission(ctx.step, parsed.params);
+  logAcp(`permission id=${String(rpcId)} allow=${String(allow)} params=${JSON.stringify(parsed.params).slice(0, 200)}`);
   ctx.sendLine({
     id: rpcId,
     jsonrpc: "2.0",
-    result: { outcome: { optionId: "allow-once", outcome: "selected" } },
+    result: buildPermissionResult(allow),
+  });
+}
+
+function logAcp(msg: string): void {
+  process.stderr.write(`[vexkit-acp] ${msg}\n`);
+}
+
+function handleUnknownRequest(parsed: Record<string, unknown>, ctx: StreamCtx): void {
+  const rpcId = parsed.id;
+  if (typeof rpcId !== "number") {
+    return;
+  }
+  logAcp(`auto-responding to unknown RPC id=${String(rpcId)} method=${String(parsed.method)}`);
+  ctx.sendLine({
+    id: rpcId,
+    jsonrpc: "2.0",
+    result: {},
   });
 }
 
@@ -144,19 +165,27 @@ function processAcpLine(trimmed: string, pending: PendingMap, ctx: StreamCtx): v
   }
   resolveJsonRpcResponse(parsed, pending);
   const method = parsed.method;
+  if (typeof method !== "string") {
+    return;
+  }
+  logAcp(`<- method=${method} id=${String(parsed.id ?? "none")}`);
   if (method === "session/update") {
     handleSessionUpdate(parsed, ctx);
     return;
   }
   if (method === "session/request_permission") {
     handlePermissionRequest(parsed, ctx);
+    return;
   }
+  logAcp(`unhandled method: ${method}`);
+  handleUnknownRequest(parsed, ctx);
 }
 
 export async function runCursorAcpPrompt(input: {
   onDelta?: (text: string) => void;
   promptText: string;
   rootAbs: string;
+  step: number;
 }): Promise<{ fullText: string; ok: true } | { message: string; ok: false }> {
   const bin = getCursorAgentBin();
   const child = spawn(bin, ["acp"], {
@@ -187,6 +216,7 @@ export async function runCursorAcpPrompt(input: {
     accumulated: "",
     onDelta: input.onDelta,
     sendLine,
+    step: input.step,
     streamedCharCount: 0,
   };
 
@@ -239,6 +269,7 @@ export async function runCursorAcpPrompt(input: {
   }
   const sessionId = sessionResult.sessionId;
 
+  logAcp(`sending session/prompt (step=${String(input.step)})...`);
   const [, promptErr] = await tryCatchAsync(async () =>
     sendRequest("session/prompt", {
       prompt: [{ text: input.promptText, type: "text" }],
@@ -246,20 +277,26 @@ export async function runCursorAcpPrompt(input: {
     }),
   );
   if (promptErr != null) {
+    logAcp(`session/prompt error: ${promptErr.message}`);
     child.kill();
     return { message: promptErr.message, ok: false };
   }
+  logAcp(`session/prompt resolved, accumulated=${String(streamCtx.accumulated.length)} chars`);
 
+  logAcp("waiting for child process to close...");
+  child.stdin.end();
   const [code, exitErr] = await tryCatchAsync(
     async () =>
       new Promise<number>((resolve, reject) => {
-        const maxMs = 900_000;
+        const maxMs = 30_000;
         const timer = setTimeout(() => {
+          logAcp("child process timeout — killing");
           child.kill("SIGTERM");
         }, maxMs);
         child.on("error", reject);
         child.on("close", (c) => {
           clearTimeout(timer);
+          logAcp(`child process closed with code ${String(c)}`);
           resolve(typeof c === "number" ? c : 1);
         });
       }),

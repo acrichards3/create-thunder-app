@@ -23,6 +23,12 @@ describe("stripAssistantThinkingVisible", () => {
       expect(stripAssistantThinkingVisible("Visible<thinking>hidden")).toBe("Visible");
     });
   });
+
+  describe("WHEN there is a thought element", () => {
+    it("removes the element", () => {
+      expect(stripAssistantThinkingVisible("A<thought>x</thought>B")).toBe("AB");
+    });
+  });
 });
 
 describe("stripLeadingDescribePlanningPreamble", () => {
@@ -46,6 +52,21 @@ describe("finalizeAssistantVisibleText", () => {
     it("returns visible user content only", () => {
       const raw = "Internal plan.\n\nHere's the scope.\n\nDetails here.";
       expect(finalizeAssistantVisibleText(raw)).toBe("Here's the scope.\n\nDetails here.");
+    });
+  });
+
+  describe("WHEN raw text exceeds the display limit", () => {
+    describe("AND the prefix is checked", () => {
+      it("starts with omission notice", () => {
+        const long = "x".repeat(25000);
+        expect(finalizeAssistantVisibleText(long).startsWith("_(Earlier assistant output omitted.)_")).toBe(true);
+      });
+    });
+    describe("AND the suffix is checked", () => {
+      it("ends with the last portion of the text", () => {
+        const long = "x".repeat(25000);
+        expect(finalizeAssistantVisibleText(long).endsWith("x".repeat(10000))).toBe(true);
+      });
     });
   });
 });

@@ -35,17 +35,51 @@ function truncateIfUnclosedOpenTag(text, openPattern, closeLiteral) {
   return text.slice(0, start);
 }
 
+const THINKING_PAIRS = [
+  [/<thinking\b[^>]*>[\s\S]*?<\/thinking>/gi, /<thinking\b[^>]*>/i, "</thinking>"],
+  [/<think\b[^>]*>[\s\S]*?<\/think>/gi, /<think\b[^>]*>/i, "</think>"],
+  [/<reasoning\b[^>]*>[\s\S]*?<\/reasoning>/gi, /<reasoning\b[^>]*>/i, "</reasoning>"],
+  [/<thought\b[^>]*>[\s\S]*?<\/thought>/gi, /<thought\b[^>]*>/i, "</thought>"],
+  [/<analysis\b[^>]*>[\s\S]*?<\/analysis>/gi, /<analysis\b[^>]*>/i, "</analysis>"],
+  [/<scratchpad\b[^>]*>[\s\S]*?<\/scratchpad>/gi, /<scratchpad\b[^>]*>/i, "</scratchpad>"],
+  [/<redacted_reasoning\b[^>]*>[\s\S]*?<\/redacted_reasoning>/gi, /<redacted_reasoning\b[^>]*>/i, "</think>"],
+];
+
 export function stripAssistantThinkingVisible(raw) {
   let out = raw;
-  out = out.replace(/<thinking\b[^>]*>[\s\S]*?<\/thinking>/gi, "");
-  out = out.replace(/<think\b[^>]*>[\s\S]*?<\/think>/gi, "");
-  out = out.replace(/<reasoning\b[^>]*>[\s\S]*?<\/reasoning>/gi, "");
-  out = truncateIfUnclosedOpenTag(out, /<thinking\b[^>]*>/i, "</thinking>");
-  out = truncateIfUnclosedOpenTag(out, /<think\b[^>]*>/i, "</think>");
-  out = truncateIfUnclosedOpenTag(out, /<reasoning\b[^>]*>/i, "</reasoning>");
+  for (const [pairRe, openRe, closeLiteral] of THINKING_PAIRS) {
+    out = out.replace(pairRe, "");
+    out = truncateIfUnclosedOpenTag(out, openRe, closeLiteral);
+  }
   return out;
 }
 
+function stripWorkflowSignals(text) {
+  return text.replace(/---(?:SCOPE_READY|SPECS_DONE|BUILD_DONE|NEED_SPEC_CHANGE)---/g, "");
+}
+
+function stripHugeFencedBlocks(text) {
+  return text.replace(/```[^\n]*\n([\s\S]*?)```/g, (full, inner) => {
+    if (inner.length > 6000) {
+      return "\n```\n_(Large fenced block omitted in chat view.)_\n```\n";
+    }
+    return full;
+  });
+}
+
+const MAX_ASSISTANT_DISPLAY_CHARS = 10000;
+
+function truncateForDisplay(text) {
+  if (text.length <= MAX_ASSISTANT_DISPLAY_CHARS) {
+    return text;
+  }
+  const tail = text.slice(-MAX_ASSISTANT_DISPLAY_CHARS);
+  return `_(Earlier assistant output omitted.)_\n\n${tail}`;
+}
+
 export function finalizeAssistantVisibleText(raw) {
-  return stripLeadingDescribePlanningPreamble(stripAssistantThinkingVisible(raw));
+  const stripped = stripAssistantThinkingVisible(stripWorkflowSignals(raw));
+  const withoutHugeFences = stripHugeFencedBlocks(stripped);
+  const cleaned = stripLeadingDescribePlanningPreamble(withoutHugeFences);
+  return truncateForDisplay(cleaned);
 }

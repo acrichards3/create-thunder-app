@@ -1,6 +1,6 @@
 import DOMPurify from "https://cdn.jsdelivr.net/npm/dompurify@3.2.6/+esm";
 import { marked } from "https://cdn.jsdelivr.net/npm/marked@15.0.6/+esm";
-import { finalizeAssistantVisibleText } from "./strip-assistant-visible-text.js?v=5";
+import { finalizeAssistantVisibleText } from "./strip-assistant-visible-text.js?v=12";
 
 const ASSISTANT_WIDTH_MIN = 260;
 const ASSISTANT_WIDTH_MAX = 560;
@@ -23,13 +23,29 @@ const ASSISTANT_MD_PURIFY = {
 };
 
 function wrapAssistantQuestionsSectionHtml(html) {
-  const re = /<h2[^>]*>\s*(?:Questions for you|Questions)\s*<\/h2>/i;
-  const m = re.exec(html);
-  if (m == null || m.index === undefined) {
-    return html;
+  const headingRe = /<h[1-4][^>]*>\s*(?:Questions?\b|Clarif(?:ying|ication)\b|Before (?:we|I)\b)[^<]*<\/h[1-4]>/i;
+  const headingMatch = headingRe.exec(html);
+  if (headingMatch != null && headingMatch.index !== undefined) {
+    return `${html.slice(0, headingMatch.index)}<div class="assistant-questions">${html.slice(headingMatch.index)}</div>`;
   }
-  const start = m.index;
-  return `${html.slice(0, start)}<div class="assistant-questions">${html.slice(start)}</div>`;
+  const listRe = /<(?:ul|ol)>[\s\S]*?<\/(?:ul|ol)>/gi;
+  let out = html;
+  let offset = 0;
+  let match;
+  while ((match = listRe.exec(html)) != null) {
+    const block = match[0];
+    const questionCount = (block.match(/\?/g) ?? []).length;
+    const itemCount = (block.match(/<li/gi) ?? []).length;
+    if (questionCount > 0 && questionCount >= itemCount * 0.5) {
+      const pos = match.index + offset;
+      const before = out.slice(0, pos);
+      const after = out.slice(pos + block.length);
+      const wrapped = `<div class="assistant-questions"><h4>Questions</h4>${block}</div>`;
+      out = before + wrapped + after;
+      offset += wrapped.length - block.length;
+    }
+  }
+  return out;
 }
 
 function parseNdjsonErrorMessage(errText) {
@@ -197,21 +213,39 @@ function renderChatMessages(container, messages) {
     row.append(label, body);
     container.append(row);
   });
-  container.scrollTop = container.scrollHeight;
+  const scrollEl = document.getElementById("assistant-scroll");
+  if (scrollEl != null) {
+    scrollEl.scrollTop = scrollEl.scrollHeight;
+  }
 }
 
+const DEFAULT_ASSISTANT_PLACEHOLDER = "Ask about your spec…";
+
 export function initAssistantPanel(input) {
-  const { saveDashboardView, state } = input;
+  const { onSpecChangeRequest, onStartNew, onStepChange, saveDashboardView, state } = input;
   const messages = [];
   const listEl = document.getElementById("assistant-messages");
   const form = document.getElementById("assistant-form");
   const inputEl = document.getElementById("assistant-input");
+  const sendBtn = document.getElementById("assistant-send");
+  const composerWrapEl = document.getElementById("assistant-composer-wrap");
+  const doneWrapEl = document.getElementById("assistant-done-wrap");
+  const startNewBtn = document.getElementById("assistant-start-new");
   const statusEl = document.getElementById("assistant-status");
+  const activityRowEl = document.getElementById("assistant-activity-row");
 
   applyAssistantWidthFromState(state);
   syncAssistantPanel(state);
 
   let thinkingTimer = null;
+
+  function setActivityBusy(isBusy) {
+    if (activityRowEl == null) {
+      return;
+    }
+    activityRowEl.classList.toggle("assistant-activity-row--busy", isBusy);
+    activityRowEl.setAttribute("aria-busy", isBusy ? "true" : "false");
+  }
 
   function clearThinkingAnimation() {
     if (thinkingTimer != null) {
@@ -219,20 +253,28 @@ export function initAssistantPanel(input) {
       thinkingTimer = null;
     }
     statusEl.classList.remove("assistant-status--thinking");
-    statusEl.removeAttribute("aria-busy");
   }
 
   function setStatus(text) {
     clearThinkingAnimation();
+    setActivityBusy(false);
     statusEl.classList.remove("assistant-status--error");
     statusEl.textContent = text;
   }
 
   function setStatusError(text) {
     clearThinkingAnimation();
+    setActivityBusy(false);
     statusEl.classList.remove("assistant-status--thinking");
     statusEl.classList.add("assistant-status--error");
-    statusEl.removeAttribute("aria-busy");
+    statusEl.textContent = text;
+  }
+
+  function setWorkingLine(text) {
+    clearThinkingAnimation();
+    setActivityBusy(true);
+    statusEl.classList.remove("assistant-status--error");
+    statusEl.classList.remove("assistant-status--thinking");
     statusEl.textContent = text;
   }
 
@@ -241,13 +283,13 @@ export function initAssistantPanel(input) {
       window.clearInterval(thinkingTimer);
       thinkingTimer = null;
     }
+    setActivityBusy(true);
     statusEl.classList.remove("assistant-status--error");
     statusEl.classList.add("assistant-status--thinking");
-    statusEl.setAttribute("aria-busy", "true");
     let phase = 0;
     const suffixes = ["", ".", "..", "..."];
     function tick() {
-      statusEl.textContent = `Thinking${suffixes[phase]}`;
+      statusEl.textContent = `Agent working${suffixes[phase]}`;
       phase = (phase + 1) % suffixes.length;
     }
     tick();
@@ -257,7 +299,10 @@ export function initAssistantPanel(input) {
   let cachedStatusLine = "";
 
   function restoreIdleStatus() {
-    setStatus(cachedStatusLine.length > 0 ? cachedStatusLine : "Cursor agent");
+    clearThinkingAnimation();
+    setActivityBusy(false);
+    statusEl.classList.remove("assistant-status--error");
+    statusEl.textContent = cachedStatusLine.length > 0 ? cachedStatusLine : "Cursor agent ready";
   }
 
   async function refreshStatus() {
@@ -284,14 +329,44 @@ export function initAssistantPanel(input) {
     }
   }
 
+  function currentStep() {
+    return typeof state.workflowStep === "number" ? state.workflowStep : 0;
+  }
+
+  function syncWorkflowComposer() {
+    if (composerWrapEl == null || doneWrapEl == null || inputEl == null || sendBtn == null) {
+      return;
+    }
+    const step = currentStep();
+    if (step === 5) {
+      composerWrapEl.hidden = true;
+      doneWrapEl.hidden = false;
+      return;
+    }
+    composerWrapEl.hidden = false;
+    doneWrapEl.hidden = true;
+    const locked = step === 3 || step === 4;
+    inputEl.disabled = locked;
+    sendBtn.disabled = locked;
+    inputEl.placeholder = locked
+      ? step === 3
+        ? "Chat disabled during build…"
+        : "Chat disabled during verification…"
+      : DEFAULT_ASSISTANT_PLACEHOLDER;
+  }
+
   function buildPayload() {
     return {
       messages: messages.map((m) => ({ content: m.content, role: m.role })),
+      step: currentStep(),
     };
   }
 
   function onSubmit(ev) {
     ev.preventDefault();
+    if (inputEl.disabled) {
+      return;
+    }
     const text = inputEl.value.trim();
     if (text.length === 0) {
       return;
@@ -303,6 +378,9 @@ export function initAssistantPanel(input) {
   }
 
   function onAssistantInputKeydown(e) {
+    if (inputEl.disabled) {
+      return;
+    }
     if (e.key !== "Enter") {
       return;
     }
@@ -357,6 +435,8 @@ export function initAssistantPanel(input) {
       let acc = "";
       let sawStreamError = false;
       let sawAssistantOutput = false;
+      let pendingStepChange = null;
+      let pendingSpecChange = null;
       try {
         for (;;) {
           const { done, value } = await reader.read();
@@ -380,7 +460,6 @@ export function initAssistantPanel(input) {
             if (ev.type === "delta" && typeof ev.text === "string") {
               if (!sawAssistantOutput) {
                 sawAssistantOutput = true;
-                restoreIdleStatus();
               }
               acc += ev.text;
               messages[assistantIdx].content = finalizeAssistantVisibleText(acc);
@@ -390,13 +469,28 @@ export function initAssistantPanel(input) {
               sawStreamError = true;
               if (!sawAssistantOutput) {
                 sawAssistantOutput = true;
-                restoreIdleStatus();
               }
               acc += `\n${ev.message}`;
               messages[assistantIdx].content = finalizeAssistantVisibleText(acc);
               messages[assistantIdx].error = true;
               renderChatMessages(listEl, messages);
               chatStatusError("Assistant reported an error.");
+            }
+            if (ev.type === "step_change" && typeof ev.step === "number") {
+              console.log("[vexkit-chat] received step_change event:", ev.step);
+              pendingStepChange = ev.step;
+            }
+            if (ev.type === "spec_change_request" && typeof ev.reason === "string") {
+              console.log("[vexkit-chat] received spec_change_request:", ev.reason);
+              pendingSpecChange = ev.reason;
+            }
+            if (ev.type === "done") {
+              console.log(
+                "[vexkit-chat] received done event, pendingStepChange:",
+                pendingStepChange,
+                "pendingSpecChange:",
+                pendingSpecChange,
+              );
             }
           });
         }
@@ -421,11 +515,89 @@ export function initAssistantPanel(input) {
         messages[assistantIdx].content = finalizeAssistantVisibleText(acc);
         renderChatMessages(listEl, messages);
       }
+      console.log(
+        "[vexkit-chat] stream finished — pendingStepChange:",
+        pendingStepChange,
+        "pendingSpecChange:",
+        pendingSpecChange,
+        "onStepChange:",
+        typeof onStepChange,
+        "onSpecChangeRequest:",
+        typeof onSpecChangeRequest,
+      );
+      if (pendingSpecChange != null && typeof onSpecChangeRequest === "function") {
+        console.log("[vexkit-chat] calling onSpecChangeRequest");
+        onSpecChangeRequest(pendingSpecChange);
+      } else if (pendingStepChange != null && typeof onStepChange === "function") {
+        console.log("[vexkit-chat] calling onStepChange with step:", pendingStepChange);
+        onStepChange(pendingStepChange);
+      } else {
+        console.log("[vexkit-chat] NO transition triggered");
+      }
     } finally {
       if (!statusErrorShown) {
         restoreIdleStatus();
       }
     }
+  }
+
+  function autoPrompt(text) {
+    const msg = typeof text === "string" && text.length > 0 ? text : "Proceed.";
+    const payload = buildPayload();
+    console.log("[vexkit-chat] autoPrompt firing — step:", payload.step, "msg:", msg);
+    messages.push({ content: msg, role: "user" });
+    renderChatMessages(listEl, messages);
+    payload.messages = messages.map((m) => ({ content: m.content, role: m.role }));
+    void sendChatRequest(payload);
+  }
+
+  function triggerVerify() {
+    setWorkingLine("Running verification (lint, format, typecheck)…");
+    console.log("[vexkit-chat] triggerVerify called");
+    messages.push({ content: "Running verification (lint, typecheck, format)...", role: "assistant", error: false });
+    renderChatMessages(listEl, messages);
+    fetch("/api/workflow/verify", { method: "POST" })
+      .then((res) => {
+        console.log("[vexkit-chat] verify response status:", res.status);
+        return res.json();
+      })
+      .then((data) => {
+        restoreIdleStatus();
+        console.log("[vexkit-chat] verify result ok:", data.ok);
+        if (data.ok === true) {
+          messages.push({ content: "All checks passed!", role: "assistant", error: false });
+          renderChatMessages(listEl, messages);
+          if (typeof onStepChange === "function") {
+            onStepChange(5);
+          }
+        } else {
+          const rawLog = typeof data.log === "string" ? data.log : "Verification failed.";
+          const errorCtx = rawLog.length > 3000 ? `${rawLog.slice(0, 3000)}\n\n... (truncated)` : rawLog;
+          messages.push({
+            content: `Verification failed. Sending errors to model to fix.\n\n\`\`\`\n${errorCtx.slice(0, 1000)}\n\`\`\``,
+            role: "assistant",
+            error: true,
+          });
+          renderChatMessages(listEl, messages);
+          if (typeof onStepChange === "function") {
+            onStepChange(3);
+          }
+          setTimeout(() => {
+            autoPrompt(`Verification failed. Fix the issues and try again.\n\n${errorCtx}`);
+          }, 200);
+        }
+      })
+      .catch((catchErr) => {
+        console.error("[vexkit-chat] verify fetch error:", catchErr);
+        restoreIdleStatus();
+        messages.push({
+          content: `Verify request failed: ${catchErr instanceof Error ? catchErr.message : String(catchErr)}`,
+          role: "assistant",
+          error: true,
+        });
+        renderChatMessages(listEl, messages);
+        setStatusError("Verify request failed.");
+      });
   }
 
   form.addEventListener("submit", onSubmit);
@@ -436,6 +608,14 @@ export function initAssistantPanel(input) {
   window.addEventListener("keydown", (e) => {
     onAssistantHotkey(e, state, saveDashboardView);
   });
+  if (startNewBtn != null && typeof onStartNew === "function") {
+    startNewBtn.addEventListener("click", () => {
+      onStartNew();
+    });
+  }
   wireAssistantResize(state, saveDashboardView);
   void refreshStatus();
+  syncWorkflowComposer();
+
+  return { autoPrompt, syncWorkflowComposer, triggerVerify };
 }

@@ -7,6 +7,7 @@ import { servePutDocument, serveSerializeVexDocument } from "./document-routes";
 import { resolveSafeVexPath } from "./resolve-safe-vex-path";
 import { serveRunSpecTests } from "./run-spec-tests-route";
 import { serveVerifyPair } from "./verify-pair-route";
+import { postWorkflowVerify } from "./workflow-verify";
 
 type Hit = { matched: boolean; value: Response | null };
 
@@ -81,6 +82,9 @@ async function dispatchCodegenApi(input: {
   }
   if (pathname === "/api/run-spec-tests" && req.method === "POST") {
     return { matched: true, value: await serveRunSpecTests({ req, rootAbs }) };
+  }
+  if (pathname === "/api/workflow/verify" && req.method === "POST") {
+    return { matched: true, value: await postWorkflowVerify(rootAbs) };
   }
   return { matched: false, value: null };
 }

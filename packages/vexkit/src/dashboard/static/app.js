@@ -1,5 +1,5 @@
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7.9.0/+esm";
-import { initAssistantPanel } from "./chat-panel.js?v=5";
+import { initAssistantPanel } from "./chat-panel.js?v=12";
 
 const NS = "http://www.w3.org/2000/svg";
 const NODE_H = 68;
@@ -50,7 +50,7 @@ function wireWorkflowRevertModal() {
     }
     const step = pendingStep;
     closeModal();
-    void postWorkflow({ revertToUiStep: step });
+    setWorkflowStep(step);
   });
   document.addEventListener("keydown", (e) => {
     if (overlay.hidden) {
@@ -70,6 +70,7 @@ const EXPLORER_WIDTH_MIN = 200;
 const EXPLORER_WIDTH_MAX = 640;
 
 const state = {
+  approvalsByPath: {},
   assistantCollapsed: false,
   assistantWidthPx: null,
   currentPath: null,
@@ -80,8 +81,7 @@ const state = {
   selectedFnIndex: 0,
   tree: [],
   vexSource: "",
-  workflow: { approvalsByPath: {}, currentVexPath: "", phase: "spec" },
-  workflowSelectedStep: 0,
+  workflowStep: 0,
 };
 
 function clampExplorerWidthPx(w) {
@@ -129,8 +129,11 @@ function loadDashboardView() {
     if (typeof parsed.assistantWidthPx === "number" && Number.isFinite(parsed.assistantWidthPx)) {
       state.assistantWidthPx = Math.min(560, Math.max(260, Math.round(parsed.assistantWidthPx)));
     }
-    if (typeof parsed.workflowSelectedStep === "number" && Number.isFinite(parsed.workflowSelectedStep)) {
-      state.workflowSelectedStep = Math.max(0, Math.min(5, Math.floor(parsed.workflowSelectedStep)));
+    if (typeof parsed.workflowStep === "number" && Number.isFinite(parsed.workflowStep)) {
+      state.workflowStep = Math.max(0, Math.min(5, Math.floor(parsed.workflowStep)));
+    }
+    if (parsed.approvalsByPath != null && typeof parsed.approvalsByPath === "object") {
+      state.approvalsByPath = parsed.approvalsByPath;
     }
   } catch {
     /* ignore corrupt or unavailable storage */
@@ -152,7 +155,8 @@ function syncLogicCanvasSpecEditClass() {
     return;
   }
   const specOk = state.parseResult?.ok === true;
-  const canSpecEdit = state.workflow.phase === "spec" && specOk;
+  const isSpecStep = state.workflowStep === 1 || state.workflowStep === 2;
+  const canSpecEdit = isSpecStep && specOk;
   viewport.classList.toggle("logic-canvas--spec-edit", canSpecEdit);
   if (canvasHint != null && specOk) {
     const doc = state.parseResult?.document;
@@ -160,7 +164,7 @@ function syncLogicCanvasSpecEditClass() {
     if (fn != null) {
       const hasWhens = Array.isArray(fn.whens) && fn.whens.length > 0;
       if (hasWhens) {
-        if (state.workflow.phase === "spec") {
+        if (isSpecStep) {
           canvasHint.textContent = "Click a node to edit its label · scroll to zoom · drag empty space to pan";
         } else {
           canvasHint.textContent = "Scroll to zoom · drag empty space to pan";
@@ -170,82 +174,28 @@ function syncLogicCanvasSpecEditClass() {
   }
 }
 
-async function fetchWorkflow() {
-  const res = await fetch("/api/workflow");
-  if (!res.ok) {
-    setWorkflowStatus("Could not load workflow state.", true);
-    return;
-  }
-  const raw = await res.json();
-  const wf = { ...raw };
-  delete wf.__client;
-  state.workflow = wf;
-  setWorkflowStatus("");
-  renderWorkflowBar();
-}
-
-async function postWorkflow(body) {
-  const prevPhase = state.workflow.phase;
-  const res = await fetch("/api/workflow", {
-    body: JSON.stringify(body),
-    headers: { "Content-Type": "application/json" },
-    method: "POST",
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    setWorkflowStatus(typeof data.message === "string" ? data.message : "Workflow update failed.", true);
-    return false;
-  }
-  const hints = data.__client;
-  const wf = { ...data };
-  delete wf.__client;
-  state.workflow = wf;
-  if (hints != null && typeof hints === "object") {
-    if (typeof hints.workflowSelectedStep === "number" && Number.isFinite(hints.workflowSelectedStep)) {
-      state.workflowSelectedStep = Math.max(0, Math.min(5, Math.floor(hints.workflowSelectedStep)));
-    }
-  } else if (data.phase !== prevPhase) {
-    state.workflowSelectedStep = computeWorkflowProgressFromState();
-  }
-  setWorkflowStatus("");
-  renderWorkflowBar();
+function setWorkflowStep(step) {
+  state.workflowStep = Math.max(0, Math.min(5, Math.floor(step)));
   saveDashboardView();
-  return true;
+  renderWorkflowBar();
 }
 
-function computeWorkflowProgressIdx(input) {
-  const { allApproved, phase } = input;
-  if (phase === "spec" && !allApproved) {
-    return 1;
-  }
-  if (phase === "spec" && allApproved) {
-    return 2;
-  }
-  if (phase === "build") {
-    return 3;
-  }
-  if (phase === "verify") {
-    return 4;
-  }
-  if (phase === "done") {
-    return 5;
-  }
-  return 0;
+function getApprovedFnNames() {
+  return new Set(state.approvalsByPath[state.currentPath ?? ""] ?? []);
 }
 
-function computeWorkflowProgressFromState() {
+function areAllFnsApproved() {
   const doc = state.parseResult != null && state.parseResult.ok ? state.parseResult.document : null;
   const fnNames = doc != null && Array.isArray(doc.functions) ? doc.functions.map((f) => f.name) : [];
-  const approved = new Set(state.workflow.approvalsByPath[state.currentPath ?? ""] ?? []);
-  const allApproved = fnNames.length > 0 && fnNames.every((n) => approved.has(n));
-  return computeWorkflowProgressIdx({
-    allApproved,
-    phase: state.workflow.phase,
-  });
+  if (fnNames.length === 0) {
+    return false;
+  }
+  const approved = getApprovedFnNames();
+  return fnNames.every((n) => approved.has(n));
 }
 
 function applyWorkflowPanelVisibility() {
-  const sel = state.workflowSelectedStep;
+  const sel = state.workflowStep;
   for (let i = 0; i < 6; i += 1) {
     const p = document.getElementById(`workflow-tabpanel-${String(i)}`);
     if (p == null) {
@@ -265,55 +215,68 @@ function workflowAddButton(parent, label, onClick, disabled) {
   parent.append(btn);
 }
 
-function renderWorkflowStepper(progressIdx) {
+function renderWorkflowStepper() {
   const nav = document.getElementById("workflow-stepper");
   nav.replaceChildren();
+  nav.setAttribute("aria-label", "Workflow steps — choose a completed step to go back");
   const line = document.createElement("div");
   line.className = "stepper-line";
   line.setAttribute("aria-hidden", "true");
   line.setAttribute("role", "presentation");
   const labels = ["Describe", "Spec", "Approve", "Build", "Verify", "Done"];
   const gapCount = labels.length - 1;
-  const splitRatio = Math.min(1, Math.max(0, progressIdx / gapCount));
+  const current = state.workflowStep;
+  const splitRatio = Math.min(1, Math.max(0, current / gapCount));
   line.style.setProperty("--stepper-line-split-pct", `${String(splitRatio * 100)}%`);
   nav.append(line);
-  const phase = state.workflow.phase;
-  const selected = state.workflowSelectedStep;
   labels.forEach((label, i) => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "stepper-node";
     btn.id = `workflow-tab-${String(i)}`;
     btn.setAttribute("aria-controls", `workflow-tabpanel-${String(i)}`);
-    btn.setAttribute("aria-selected", selected === i ? "true" : "false");
+    btn.setAttribute("aria-selected", current === i ? "true" : "false");
     btn.setAttribute("role", "tab");
-    if (phase === "done") {
+    if (i > current) {
+      btn.disabled = true;
+      btn.setAttribute("aria-disabled", "true");
+      btn.setAttribute("title", "Complete earlier steps first");
+      btn.setAttribute("aria-label", `${label} (locked)`);
+    } else if (i < current) {
+      btn.setAttribute("title", `Go back to ${label}`);
+      btn.setAttribute("aria-label", `Go back to ${label}`);
+    } else {
+      btn.setAttribute("title", `Current: ${label}`);
+      btn.setAttribute("aria-label", `Current step: ${label}`);
+    }
+    if (current === 5) {
       btn.classList.add("stepper-node--done-all");
-    } else if (i < progressIdx) {
+    } else if (i < current) {
       btn.classList.add("stepper-node--past");
-    } else if (i === progressIdx) {
+    } else if (i === current) {
       btn.classList.add("stepper-node--current");
     } else {
       btn.classList.add("stepper-node--future");
     }
-    if (selected === i) {
+    if (current === i) {
       btn.classList.add("stepper-node--selected");
     }
     const inner = document.createElement("span");
     inner.className = "stepper-node__label";
     inner.textContent = label;
+    inner.setAttribute("aria-hidden", "true");
     btn.append(inner);
     const stepIndex = i;
     btn.addEventListener("click", () => {
-      state.workflowSelectedStep = stepIndex;
-      saveDashboardView();
-      renderWorkflowBar();
+      if (stepIndex < current) {
+        openWorkflowRevertModal(stepIndex);
+      }
     });
     nav.append(btn);
   });
 }
 
-function renderWorkflowActions(fnNames, allApproved) {
+function renderWorkflowActions() {
   const continueEl = document.getElementById("workflow-actions-continue");
   const buildEl = document.getElementById("workflow-actions-build");
   const verifyEl = document.getElementById("workflow-actions-verify");
@@ -322,35 +285,19 @@ function renderWorkflowActions(fnNames, allApproved) {
   buildEl.replaceChildren();
   verifyEl.replaceChildren();
   doneEl.replaceChildren();
-  const phase = state.workflow.phase;
+  const step = state.workflowStep;
   const pathOk = state.currentPath != null && state.currentPath.length > 0;
-  const verifyOk = state.workflow.verifyLastResult != null && state.workflow.verifyLastResult.ok === true;
 
   workflowAddButton(
     continueEl,
-    "Continue to build",
+    "Continue to Build",
     () => {
-      void postWorkflow({ phase: "build" });
+      setWorkflowStep(3);
+      if (assistantControls != null) {
+        setTimeout(() => assistantControls.autoPrompt(), 100);
+      }
     },
-    phase !== "spec" || !pathOk || !allApproved || fnNames.length === 0,
-  );
-
-  workflowAddButton(
-    buildEl,
-    "Back to spec",
-    () => {
-      void postWorkflow({ phase: "spec" });
-    },
-    phase !== "build" && phase !== "verify",
-  );
-
-  workflowAddButton(
-    buildEl,
-    "Proceed to verify",
-    () => {
-      void postWorkflow({ phase: "verify" });
-    },
-    phase !== "build",
+    step !== 2 || !areAllFnsApproved(),
   );
 
   workflowAddButton(
@@ -388,113 +335,51 @@ function renderWorkflowActions(fnNames, allApproved) {
         setWorkflowStatus(`Wrote ${typeof data.wrote === "string" ? data.wrote : "spec"}.`);
       })();
     },
-    phase !== "build" || !pathOk,
-  );
-
-  workflowAddButton(
-    verifyEl,
-    "Run full verify",
-    () => {
-      void (async () => {
-        const res = await fetch("/api/workflow/verify-run", {
-          method: "POST",
-        });
-        const data = await res.json().catch(() => ({}));
-        if (typeof data.state === "object" && data.state != null) {
-          state.workflow = data.state;
-        }
-        if (res.ok) {
-          setWorkflowStatus("Verify pipeline passed.");
-          renderWorkflowBar();
-          return;
-        }
-        const msg =
-          typeof data.log === "string" ? data.log : typeof data.message === "string" ? data.message : "Verify failed.";
-        setWorkflowStatus(msg, true);
-        renderWorkflowBar();
-      })();
-    },
-    phase !== "verify",
-  );
-
-  workflowAddButton(
-    verifyEl,
-    "Verify pair",
-    () => {
-      if (state.currentPath == null) {
-        return;
-      }
-      void (async () => {
-        const q = new URLSearchParams({ path: state.currentPath });
-        const res = await fetch(`/api/verify-pair?${q.toString()}`);
-        const data = await res.json().catch(() => ({}));
-        if (res.ok) {
-          setWorkflowStatus("Verify: structure matches paired .spec.ts.");
-        } else {
-          setWorkflowStatus(typeof data.message === "string" ? data.message : "Verify failed.", true);
-        }
-      })();
-    },
-    !pathOk,
-  );
-
-  workflowAddButton(
-    verifyEl,
-    "Run paired tests",
-    () => {
-      if (state.currentPath == null) {
-        return;
-      }
-      void (async () => {
-        const res = await fetch("/api/run-spec-tests", {
-          body: JSON.stringify({ path: state.currentPath }),
-          headers: { "Content-Type": "application/json" },
-          method: "POST",
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          const msg =
-            typeof data.message === "string"
-              ? data.message
-              : `${typeof data.stdout === "string" ? data.stdout : ""}${typeof data.stderr === "string" ? data.stderr : ""}`;
-          setWorkflowStatus(msg.trim().length > 0 ? msg : "Tests failed.", true);
-          return;
-        }
-        setWorkflowStatus("Tests passed.");
-      })();
-    },
-    !pathOk,
+    step !== 3 || !pathOk,
   );
 
   workflowAddButton(
     doneEl,
-    "Mark done",
+    "Start New",
     () => {
-      void postWorkflow({ phase: "done" });
+      state.approvalsByPath = {};
+      setWorkflowStep(0);
     },
-    phase !== "verify" || !verifyOk,
+    step !== 5,
   );
+}
 
-  workflowAddButton(
-    doneEl,
-    "Restart workflow",
-    () => {
-      void postWorkflow({ resetWorkflow: true });
-    },
-    phase !== "done",
-  );
+function toggleApproval(fnName) {
+  const key = state.currentPath ?? "";
+  const current = state.approvalsByPath[key] ?? [];
+  const set = new Set(current);
+  if (set.has(fnName)) {
+    set.delete(fnName);
+  } else {
+    set.add(fnName);
+  }
+  state.approvalsByPath[key] = [...set];
+  saveDashboardView();
+  renderWorkflowBar();
+}
+
+function approveAll(fnNames) {
+  const key = state.currentPath ?? "";
+  state.approvalsByPath[key] = [...fnNames];
+  saveDashboardView();
+  renderWorkflowBar();
 }
 
 function renderWorkflowApprovals(fnNames) {
   const wrap = document.getElementById("workflow-approvals");
   const outer = document.getElementById("workflow-approvals-wrap");
   wrap.replaceChildren();
-  if (fnNames.length === 0 || state.workflow.phase !== "spec") {
+  if (fnNames.length === 0 || state.workflowStep !== 2) {
     outer.hidden = true;
     return;
   }
   outer.hidden = false;
-  const approved = new Set(state.workflow.approvalsByPath[state.currentPath ?? ""] ?? []);
+  const approved = getApprovedFnNames();
   const approveAllRow = document.createElement("div");
   approveAllRow.className = "workflow-fn-approve";
   const approveAllBtn = document.createElement("button");
@@ -502,7 +387,7 @@ function renderWorkflowApprovals(fnNames) {
   approveAllBtn.className = "workflow-btn";
   approveAllBtn.textContent = "Approve all functions";
   approveAllBtn.addEventListener("click", () => {
-    void postWorkflow({ approveAllFunctionsForCurrentPath: true });
+    approveAll(fnNames);
   });
   approveAllRow.append(approveAllBtn);
   wrap.append(approveAllRow);
@@ -518,62 +403,31 @@ function renderWorkflowApprovals(fnNames) {
     const isAp = approved.has(name);
     btn.textContent = isAp ? "Unapprove" : "Approve";
     btn.addEventListener("click", () => {
-      void postWorkflow(isAp ? { unapproveFunction: name } : { approveFunction: name });
+      toggleApproval(name);
     });
     row.append(lab, btn);
     wrap.append(row);
   });
 }
 
-function renderWorkflowRevertRow() {
-  const row = document.getElementById("workflow-revert");
-  row.replaceChildren();
-  const current = computeWorkflowProgressFromState();
-  if (current <= 0) {
-    return;
-  }
-  const lead = document.createElement("div");
-  lead.className = "workflow-revert-lead";
-  lead.textContent = "Go back to";
-  row.append(lead);
-  const group = document.createElement("div");
-  group.className = "workflow-revert-buttons";
-  row.append(group);
-  for (let i = 0; i < current; i += 1) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "workflow-btn workflow-btn-revert";
-    btn.textContent = WORKFLOW_STEP_LABELS[i];
-    const step = i;
-    btn.addEventListener("click", () => {
-      openWorkflowRevertModal(step);
-    });
-    group.append(btn);
-  }
-}
-
 function renderWorkflowBar() {
   const doc = state.parseResult != null && state.parseResult.ok ? state.parseResult.document : null;
   const fnNames = doc != null && Array.isArray(doc.functions) ? doc.functions.map((f) => f.name) : [];
-  const approved = new Set(state.workflow.approvalsByPath[state.currentPath ?? ""] ?? []);
-  const allApproved = fnNames.length > 0 && fnNames.every((n) => approved.has(n));
-  const phase = state.workflow.phase;
-  const progressIdx = computeWorkflowProgressIdx({
-    allApproved,
-    phase,
-  });
 
-  renderWorkflowStepper(progressIdx);
-  renderWorkflowRevertRow();
-  renderWorkflowActions(fnNames, allApproved);
+  renderWorkflowStepper();
+  renderWorkflowActions();
   renderWorkflowApprovals(fnNames);
   applyWorkflowPanelVisibility();
   syncLogicCanvasSpecEditClass();
+  if (assistantControls != null && typeof assistantControls.syncWorkflowComposer === "function") {
+    assistantControls.syncWorkflowComposer();
+  }
 }
 
 function saveDashboardView() {
   try {
     const payload = {
+      approvalsByPath: state.approvalsByPath,
       assistantCollapsed: state.assistantCollapsed,
       assistantWidthPx: typeof state.assistantWidthPx === "number" ? state.assistantWidthPx : null,
       currentPath: state.currentPath,
@@ -581,7 +435,7 @@ function saveDashboardView() {
       expandedDirs: [...state.expandedDirs],
       explorerWidthPx: typeof state.explorerWidthPx === "number" ? state.explorerWidthPx : null,
       selectedFnIndex: state.selectedFnIndex,
-      workflowSelectedStep: state.workflowSelectedStep,
+      workflowStep: state.workflowStep,
     };
     localStorage.setItem(DASHBOARD_VIEW_STORAGE_KEY, JSON.stringify(payload));
   } catch {
@@ -743,7 +597,7 @@ function openVexNodeEditDialog(data) {
 }
 
 function onLogicNodeHitClick(data) {
-  if (state.workflow.phase !== "spec") {
+  if (state.workflowStep !== 1 && state.workflowStep !== 2) {
     return;
   }
   if (state.currentPath == null || state.parseResult?.ok !== true) {
@@ -1110,7 +964,7 @@ function renderLogicGraph(fn) {
   const viewport = document.getElementById("logic-canvas-viewport");
   viewport.classList.toggle(
     "logic-canvas--spec-edit",
-    state.workflow.phase === "spec" && state.parseResult?.ok === true,
+    (state.workflowStep === 1 || state.workflowStep === 2) && state.parseResult?.ok === true,
   );
   svg.replaceChildren();
   const defs = document.createElementNS(NS, "defs");
@@ -1303,7 +1157,7 @@ function updateMainPanel() {
     if (canvasHint != null) {
       const hasWhens = Array.isArray(fn.whens) && fn.whens.length > 0;
       if (hasWhens) {
-        if (state.workflow.phase === "spec") {
+        if (state.workflowStep === 1 || state.workflowStep === 2) {
           canvasHint.textContent =
             "Use the assistant to describe work across .vex files · scroll to zoom · drag empty space to pan";
         } else {
@@ -1321,7 +1175,6 @@ function updateMainPanel() {
 }
 
 async function openVexFile(relPath, options) {
-  const pathChanged = state.currentPath !== relPath;
   const resetFunctionIndex = options?.resetFunctionIndex !== false;
   state.currentPath = relPath;
   if (resetFunctionIndex) {
@@ -1347,18 +1200,7 @@ async function openVexFile(relPath, options) {
       ok: false,
     };
   }
-  if (res.ok) {
-    const synced = await postWorkflow({ currentVexPath: relPath });
-    if (!synced) {
-      await fetchWorkflow();
-    }
-  } else {
-    await fetchWorkflow();
-  }
-  if (pathChanged) {
-    state.workflowSelectedStep = computeWorkflowProgressFromState();
-    saveDashboardView();
-  }
+  saveDashboardView();
   updateMainPanel();
   renderFileTree();
 }
@@ -1492,7 +1334,62 @@ window.addEventListener("keydown", onExplorerHotkey);
 syncExplorerPanel();
 wireSidebarResize();
 
-initAssistantPanel({
+let assistantControls = null;
+
+function handleStepChange(newStep) {
+  setWorkflowStep(newStep);
+  if (newStep === 1) {
+    if (assistantControls != null) {
+      setTimeout(() => assistantControls.autoPrompt(), 100);
+    }
+  }
+  if (newStep === 4 && assistantControls != null) {
+    assistantControls.triggerVerify();
+  }
+}
+
+function handleSpecChangeRequest(reason) {
+  const overlay = document.getElementById("workflow-revert-modal-overlay");
+  const bodyEl = document.getElementById("workflow-revert-modal-body");
+  const titleEl = document.getElementById("workflow-revert-modal-title");
+  if (overlay == null || bodyEl == null || titleEl == null) {
+    return;
+  }
+  titleEl.textContent = "Agent requests spec changes";
+  bodyEl.textContent = reason;
+  overlay.hidden = false;
+  overlay.setAttribute("aria-hidden", "false");
+  const confirmBtn = document.getElementById("workflow-revert-modal-confirm");
+  const cancelBtn = document.getElementById("workflow-revert-modal-cancel");
+  function cleanup() {
+    confirmBtn.removeEventListener("click", onConfirm);
+    cancelBtn.removeEventListener("click", onCancel);
+  }
+  function onConfirm() {
+    cleanup();
+    overlay.hidden = true;
+    overlay.setAttribute("aria-hidden", "true");
+    setWorkflowStep(1);
+    if (assistantControls != null) {
+      setTimeout(() => assistantControls.autoPrompt("Refine the specs based on the build feedback."), 100);
+    }
+  }
+  function onCancel() {
+    cleanup();
+    overlay.hidden = true;
+    overlay.setAttribute("aria-hidden", "true");
+  }
+  confirmBtn.addEventListener("click", onConfirm);
+  cancelBtn.addEventListener("click", onCancel);
+}
+
+assistantControls = initAssistantPanel({
+  onSpecChangeRequest: handleSpecChangeRequest,
+  onStartNew: () => {
+    state.approvalsByPath = {};
+    setWorkflowStep(0);
+  },
+  onStepChange: handleStepChange,
   saveDashboardView,
   state,
 });
@@ -1538,7 +1435,6 @@ function connectProjectWatch() {
 connectProjectWatch();
 
 void (async () => {
-  await fetchWorkflow();
   await refreshTree();
   if (state.currentPath != null && !treeHasRelativePath(state.tree, state.currentPath)) {
     state.currentPath = null;
@@ -1548,4 +1444,5 @@ void (async () => {
   if (state.currentPath != null) {
     await openVexFile(state.currentPath, { resetFunctionIndex: false });
   }
+  renderWorkflowBar();
 })();
