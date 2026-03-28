@@ -212,7 +212,17 @@ function wireAssistantResize(state, saveDashboardView) {
   handle.addEventListener("pointercancel", onPointerUp);
 }
 
-function renderChatMessages(container, messages) {
+function renderChatMessages(container, messages, scrollOptions) {
+  const forceBottom = scrollOptions != null && scrollOptions.forceBottom === true;
+  const scrollEl = document.getElementById("assistant-scroll");
+  let scrollTopBefore = 0;
+  let scrollHeightBefore = 0;
+  let clientHeightBefore = 0;
+  if (scrollEl != null && !forceBottom) {
+    scrollTopBefore = scrollEl.scrollTop;
+    scrollHeightBefore = scrollEl.scrollHeight;
+    clientHeightBefore = scrollEl.clientHeight;
+  }
   container.replaceChildren();
   messages.forEach((m, i) => {
     const row = document.createElement("div");
@@ -237,10 +247,27 @@ function renderChatMessages(container, messages) {
     row.append(label, body);
     container.append(row);
   });
-  const scrollEl = document.getElementById("assistant-scroll");
-  if (scrollEl != null) {
-    scrollEl.scrollTop = scrollEl.scrollHeight;
+  function applyAssistantScroll() {
+    if (scrollEl == null) {
+      return;
+    }
+    const maxScroll = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+    if (forceBottom) {
+      scrollEl.scrollTop = maxScroll;
+      return;
+    }
+    const thresholdPx = 72;
+    const distanceFromBottom = Math.max(0, scrollHeightBefore - scrollTopBefore - clientHeightBefore);
+    const pinnedToBottom = distanceFromBottom <= thresholdPx;
+    if (pinnedToBottom) {
+      scrollEl.scrollTop = maxScroll;
+      return;
+    }
+    scrollEl.scrollTop = Math.min(scrollTopBefore, maxScroll);
   }
+  window.requestAnimationFrame(() => {
+    applyAssistantScroll();
+  });
 }
 
 const DEFAULT_ASSISTANT_PLACEHOLDER = "Ask about your spec…";
@@ -544,7 +571,7 @@ export function initAssistantPanel(input) {
     }
     inputEl.value = "";
     messages.push({ content: text, role: "user" });
-    renderChatMessages(listEl, messages);
+    renderChatMessages(listEl, messages, { forceBottom: true });
     void sendChatRequest(buildPayload());
   }
 
@@ -571,7 +598,7 @@ export function initAssistantPanel(input) {
 
     setThinking();
     messages.push({ content: "", role: "assistant", error: false });
-    renderChatMessages(listEl, messages);
+    renderChatMessages(listEl, messages, { forceBottom: true });
     const assistantIdx = messages.length - 1;
 
     try {
@@ -742,7 +769,7 @@ export function initAssistantPanel(input) {
     const payload = buildPayload();
     console.log("[vexkit-chat] autoPrompt firing — step:", payload.step, "msg:", msg);
     messages.push({ content: msg, role: "user" });
-    renderChatMessages(listEl, messages);
+    renderChatMessages(listEl, messages, { forceBottom: true });
     payload.messages = messages.map((m) => ({ content: m.content, role: m.role }));
     void sendChatRequest(payload);
   }
@@ -751,7 +778,7 @@ export function initAssistantPanel(input) {
     setWorkingLine("Running verification (lint, format, typecheck)…");
     console.log("[vexkit-chat] triggerVerify called");
     messages.push({ content: "Running verification (lint, typecheck, format)...", role: "assistant", error: false });
-    renderChatMessages(listEl, messages);
+    renderChatMessages(listEl, messages, { forceBottom: true });
     fetch("/api/workflow/verify", { method: "POST" })
       .then((res) => {
         console.log("[vexkit-chat] verify response status:", res.status);

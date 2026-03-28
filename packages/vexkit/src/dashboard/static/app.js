@@ -1,5 +1,5 @@
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7.9.0/+esm";
-import { initAssistantPanel } from "./chat-panel.js?v=19";
+import { initAssistantPanel } from "./chat-panel.js?v=20";
 
 const NS = "http://www.w3.org/2000/svg";
 const NODE_MAX_W = 248;
@@ -156,6 +156,40 @@ function setWorkflowStatus(text, isErr) {
   el.classList.toggle("err", Boolean(isErr));
 }
 
+async function runCodegenSpecForCurrentPath() {
+  const path = state.currentPath;
+  if (path == null || path.length === 0) {
+    setWorkflowStatus("Open a .vex file before continuing.", true);
+    return false;
+  }
+  const res = await fetch("/api/codegen-spec", {
+    body: JSON.stringify({ overwrite: false, path }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 409) {
+    const again = await fetch("/api/codegen-spec", {
+      body: JSON.stringify({ overwrite: true, path }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+    const d2 = await again.json().catch(() => ({}));
+    if (!again.ok) {
+      setWorkflowStatus(typeof d2.message === "string" ? d2.message : "Codegen failed.", true);
+      return false;
+    }
+    setWorkflowStatus(`Wrote ${typeof d2.wrote === "string" ? d2.wrote : "spec"}.`);
+    return true;
+  }
+  if (!res.ok) {
+    setWorkflowStatus(typeof data.message === "string" ? data.message : "Codegen failed.", true);
+    return false;
+  }
+  setWorkflowStatus(`Wrote ${typeof data.wrote === "string" ? data.wrote : "spec"}.`);
+  return true;
+}
+
 function syncLogicCanvasSpecEditClass() {
   const viewport = document.getElementById("logic-canvas-viewport");
   const logicTree = document.getElementById("logic-tree");
@@ -295,56 +329,24 @@ function renderWorkflowActions() {
   verifyEl.replaceChildren();
   doneEl.replaceChildren();
   const step = state.workflowStep;
-  const pathOk = state.currentPath != null && state.currentPath.length > 0;
 
   workflowAddButton(
     continueEl,
     "Continue to Build",
     () => {
-      setWorkflowStep(3);
-      if (assistantControls != null) {
-        setTimeout(() => assistantControls.autoPrompt(), 100);
-      }
-    },
-    step !== 2 || !areAllFnsApproved(),
-  );
-
-  workflowAddButton(
-    buildEl,
-    "Generate spec",
-    () => {
-      if (state.currentPath == null) {
-        return;
-      }
       void (async () => {
-        const res = await fetch("/api/codegen-spec", {
-          body: JSON.stringify({ overwrite: false, path: state.currentPath }),
-          headers: { "Content-Type": "application/json" },
-          method: "POST",
-        });
-        const data = await res.json().catch(() => ({}));
-        if (res.status === 409) {
-          const again = await fetch("/api/codegen-spec", {
-            body: JSON.stringify({ overwrite: true, path: state.currentPath }),
-            headers: { "Content-Type": "application/json" },
-            method: "POST",
-          });
-          const d2 = await again.json().catch(() => ({}));
-          if (!again.ok) {
-            setWorkflowStatus(typeof d2.message === "string" ? d2.message : "Codegen failed.", true);
-            return;
-          }
-          setWorkflowStatus(`Wrote ${typeof d2.wrote === "string" ? d2.wrote : "spec"}.`);
+        setWorkflowStatus("Generating spec…");
+        const ok = await runCodegenSpecForCurrentPath();
+        if (!ok) {
           return;
         }
-        if (!res.ok) {
-          setWorkflowStatus(typeof data.message === "string" ? data.message : "Codegen failed.", true);
-          return;
+        setWorkflowStep(3);
+        if (assistantControls != null) {
+          setTimeout(() => assistantControls.autoPrompt(), 100);
         }
-        setWorkflowStatus(`Wrote ${typeof data.wrote === "string" ? data.wrote : "spec"}.`);
       })();
     },
-    step !== 3 || !pathOk,
+    step !== 2 || !areAllFnsApproved(),
   );
 
   workflowAddButton(
