@@ -3,7 +3,7 @@ const { spawnSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 
-const DIAGNOSTIC_SOURCE = "vex-spec";
+const DIAGNOSTIC_SOURCE = "vex-language";
 const VALIDATION_DEBOUNCE_MS = 300;
 
 /**
@@ -34,7 +34,7 @@ function runVexkitParseJson(text, workspaceRoot, cliPath) {
       errors: [
         {
           line: 1,
-          message: `vex-spec: could not run Bun (${result.error.message}). Install Bun and ensure it is on PATH.`,
+          message: `vex-language: could not run Bun (${result.error.message}). Install Bun and ensure it is on PATH.`,
         },
       ],
       ok: false,
@@ -59,7 +59,7 @@ function runVexkitParseJson(text, workspaceRoot, cliPath) {
       errors: [
         {
           line: 1,
-          message: `vex-spec: invalid JSON from vexkit (exit ${String(result.status ?? 0)}). stdout: ${out.slice(0, 120)} stderr: ${errTail}`,
+          message: `vex-language: invalid JSON from vexkit (exit ${String(result.status ?? 0)}). stdout: ${out.slice(0, 120)} stderr: ${errTail}`,
         },
       ],
       ok: false,
@@ -70,7 +70,7 @@ function runVexkitParseJson(text, workspaceRoot, cliPath) {
     errors: [
       {
         line: 1,
-        message: `vex-spec: unexpected vexkit output (exit ${String(result.status ?? 0)}).`,
+        message: `vex-language: unexpected vexkit output (exit ${String(result.status ?? 0)}).`,
       },
     ],
     ok: false,
@@ -140,7 +140,7 @@ function activate(context) {
     if (!folder) {
       const w = new vscode.Diagnostic(
         new vscode.Range(0, 0, 0, 0),
-        "vex-spec: open a folder workspace so packages/vexkit can be found.",
+        "vex-language: open a folder workspace so packages/vexkit can be found.",
         vscode.DiagnosticSeverity.Warning,
       );
       w.source = DIAGNOSTIC_SOURCE;
@@ -153,7 +153,7 @@ function activate(context) {
     if (!cli) {
       const w = new vscode.Diagnostic(
         new vscode.Range(0, 0, 0, 0),
-        "vex-spec: packages/vexkit/src/cli.ts not found in this workspace.",
+        "vex-language: packages/vexkit/src/cli.ts not found in this workspace.",
         vscode.DiagnosticSeverity.Warning,
       );
       w.source = DIAGNOSTIC_SOURCE;

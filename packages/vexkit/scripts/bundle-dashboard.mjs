@@ -10,6 +10,10 @@ const OUT_DIR = join(ROOT, "dist/dashboard/bundle");
 
 // Ensure output directory exists
 mkdirSync(OUT_DIR, { recursive: true });
+const staleDocs = join(OUT_DIR, "docs.html");
+if (existsSync(staleDocs)) {
+  rmSync(staleDocs);
+}
 
 // --- Step 0: Clean and prepare working directory ---
 const WORK_DIR = join(OUT_DIR, "_work");
@@ -96,12 +100,6 @@ let processedHtml = html.replace(
 );
 
 writeFileSync(join(OUT_DIR, "index.html"), processedHtml, "utf-8");
-
-// --- Step 5: Copy non-JS static assets ---
-const docsSrc = join(STATIC_DIR, "docs.html");
-if (existsSync(docsSrc)) {
-  copyFileSync(docsSrc, join(OUT_DIR, "docs.html"));
-}
 
 // Clean up work dir
 try { rmSync(WORK_DIR, { recursive: true }); } catch {}

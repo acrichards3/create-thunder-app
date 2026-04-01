@@ -59,11 +59,13 @@
         flex-shrink: 0;
         gap: 0.5rem;
       }
-      #assistant-panel .workflow-stepper-bar {
+      .workflow-stepper-bar {
         --stepper-node-size: 2.85rem;
         border-bottom: 1px solid var(--border);
         flex-shrink: 0;
-        padding: 0.35rem 0.85rem 0.45rem;
+        min-height: 3.75rem;
+        padding: 0.5rem 1rem 0.55rem;
+        width: 100%;
       }
       #assistant-panel .workflow-strip {
         flex-shrink: 0;
@@ -87,11 +89,12 @@
         align-items: center;
         display: flex;
         flex-direction: column;
+        min-height: 3.25rem;
         padding: 0.35rem 0 0.15rem;
         position: relative;
         width: 100%;
       }
-      #assistant-panel .stepper-track {
+      .workflow-stepper-bar .stepper-track {
         padding-inline: 0.2rem;
       }
       .stepper-line {
@@ -120,7 +123,9 @@
         flex-wrap: nowrap;
         gap: 0;
         justify-content: space-between;
-        max-width: 44rem;
+        margin-left: auto;
+        margin-right: auto;
+        max-width: min(40rem, 100%);
         min-width: 0;
         position: relative;
         width: 100%;
@@ -182,6 +187,15 @@
           0 0 0 1px var(--bg),
           0 0 0 3px var(--vex-violet-glow);
         color: var(--text);
+      }
+      .stepper-node--next {
+        background: var(--bg);
+        border-color: var(--accent);
+        color: var(--text);
+        cursor: pointer;
+      }
+      .stepper-node--next:hover {
+        border-color: var(--vex-violet-light);
       }
       .stepper-node--future {
         background: var(--bg);
@@ -477,15 +491,27 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .header-doc-link {
-        color: var(--accent);
-        flex-shrink: 0;
-        font-size: 0.8rem;
-        font-weight: 500;
-        text-decoration: none;
+      .sr-only {
+        border: 0;
+        clip: rect(0, 0, 0, 0);
+        height: 1px;
+        overflow: hidden;
+        padding: 0;
+        position: absolute;
+        white-space: nowrap;
+        width: 1px;
       }
-      .header-doc-link:hover {
-        text-decoration: underline;
+      .vex-file-switcher {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        flex-shrink: 1;
+        font: inherit;
+        font-size: 0.78rem;
+        max-width: min(100%, 22rem);
+        min-width: 0;
+        padding: 0.3rem 0.45rem;
       }
       #layout {
         display: flex;
@@ -1233,7 +1259,10 @@
         ⟨
       </button>
       <span class="header-root" id="header-root">Loading project…</span>
-      <a class="header-doc-link" href="/docs">Docs</a>
+      <label class="sr-only" for="vex-file-switcher">Active .vex file</label>
+      <select class="vex-file-switcher" id="vex-file-switcher" title="Switch .vex file in this project">
+        <option value="">Loading…</option>
+      </select>
       <span class="header-fill" aria-hidden="true"></span>
       <button
         aria-controls="assistant-shell"
@@ -1246,6 +1275,13 @@
         ⟫
       </button>
     </header>
+    <section aria-label="Workflow steps" class="workflow-stepper-bar">
+      <div class="stepper-shell">
+        <div class="stepper-track">
+          <nav aria-label="Spec workflow steps" class="stepper-nodes" id="workflow-stepper" role="tablist"></nav>
+        </div>
+      </div>
+    </section>
     <div id="layout">
       <script>
         (function () {
@@ -1334,14 +1370,7 @@
           tabindex="0"
         ></div>
         <div id="assistant-panel">
-          <div class="assistant-panel-head">Assistant</div>
-          <section aria-label="Workflow steps" class="workflow-stepper-bar">
-            <div class="stepper-shell">
-              <div class="stepper-track">
-                <nav aria-label="Spec workflow steps" class="stepper-nodes" id="workflow-stepper" role="tablist"></nav>
-              </div>
-            </div>
-          </section>
+          <div class="assistant-panel-head">Workflow</div>
           <div class="assistant-scroll" id="assistant-scroll">
             <section aria-label="Workflow" class="workflow-strip" id="workflow-strip">
               <div class="workflow-panels" id="workflow-panels">
@@ -1353,10 +1382,13 @@
                 >
                   <div class="workflow-panel-title">Describe</div>
                   <p class="workflow-panel-lead">
-                    Tell the assistant what you want—one iteration can touch several
+                    Use
+                    <strong>Cursor chat</strong>
+                    (this IDE) to describe what you want. You can touch several
                     <code class="workflow-code">.vex</code>
-                    files. After you send your first message, the workflow moves to Spec so the model can shape the
-                    trees. Open files in the sidebar as needed; the current file is just the focused tree.
+                    files. When you move to Spec, the graph here is the source of truth. Open
+                    <code class="workflow-code">.vex</code>
+                    files from the file tree as needed.
                   </p>
                 </div>
                 <div
@@ -1401,7 +1433,9 @@
                   <div class="workflow-panel-title">Build</div>
                   <p class="workflow-panel-lead">
                     Paired <code class="workflow-code">.spec.ts</code> files are emitted when you continue from Approve.
-                    The assistant implements code and tests; it must not modify
+                    Use
+                    <strong>Cursor chat</strong>
+                    to implement code and tests; it must not modify
                     <code class="workflow-code">.vex</code>
                     files. Use Back to spec if requirements need to change.
                   </p>

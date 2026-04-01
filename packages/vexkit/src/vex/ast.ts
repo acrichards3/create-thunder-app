@@ -20,6 +20,7 @@ export type VexWhen = {
 };
 
 export type VexFunction = {
+  description: string;
   line: number;
   name: string;
   whens: VexWhen[];

@@ -10,7 +10,7 @@ import { VEXKIT_VERSION } from "./index";
 async function printUsage(): Promise<void> {
   await Bun.write(
     Bun.stdout,
-    `vexkit ${VEXKIT_VERSION}\n\nUsage:\n  vexkit              Show version\n  vexkit parse [--json] <file|->   Parse and validate (.vex); use - for stdin\n  vexkit verify <file.vex>       Check .vex vs co-located .spec.ts structure\n  vexkit codegen-spec [--force] <file.vex>   Emit paired .spec.ts skeleton\n  vexkit test-spec <file.vex>    Run bun test on paired spec (no it.todo)\n  vexkit dashboard [--port 8888]   Spec dashboard (workflow under .vexkit/; chat assistant)\n  In-browser docs: /docs on the same origin\n\nDashboard env:\n  VEXKIT_USE_CURSOR_AGENT=1 and CURSOR_API_KEY   Cursor CLI agent via ACP\n  VEXKIT_CURSOR_AGENT_BIN   Optional path to agent binary\n`,
+    `vexkit ${VEXKIT_VERSION}\n\nUsage:\n  vexkit              Show version\n  vexkit parse [--json] <file|->   Parse and validate (.vex); use - for stdin\n  vexkit verify <file.vex>       Check .vex vs co-located .spec.ts structure\n  vexkit codegen-spec [--force] <file.vex>   Emit paired .spec.ts skeleton\n  vexkit test-spec <file.vex>    Run bun test on paired spec (no it.todo)\n  vexkit dashboard [--port 8888]   HTTP API for the Cursor Feature Workflow extension (no browser UI)\n\nDashboard API env:\n  VEXKIT_USE_CURSOR_AGENT=1 and CURSOR_API_KEY   Cursor CLI agent via ACP\n  VEXKIT_CURSOR_AGENT_BIN   Optional path to agent binary\n`,
   );
 }
 

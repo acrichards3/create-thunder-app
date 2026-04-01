@@ -1,5 +1,5 @@
 import type { VexAnd, VexDocument, VexFunction, VexIt, VexParseError, VexWhen } from "./ast";
-import { countLeadingSpaces, parseFunctionNameFromLine, parseListLineParts } from "./parse-vex-line";
+import { countLeadingSpaces, parseFunctionHeaderFromLine, parseListLineParts } from "./parse-vex-line";
 import type { StackEntry } from "./parse-vex-stack";
 import { peekStack, popStackForListLine } from "./parse-vex-stack";
 
@@ -8,6 +8,8 @@ export type ParseContext = {
   errors: VexParseError[];
   stack: StackEntry[];
 };
+
+const RESERVED_FUNCTION_NAMES = new Set(["AND", "IT", "WHEN"]);
 
 function pushError(errors: VexParseError[], line: number, message: string): void {
   errors.push({ line, message });
@@ -25,14 +27,19 @@ function processFunctionDeclarationLine(input: {
     return;
   }
 
-  const { name } = parseFunctionNameFromLine(content);
+  const { description, name } = parseFunctionHeaderFromLine(content);
   if (name == null) {
-    pushError(ctx.errors, lineNo, 'Expected a function line like "myFunction:".');
+    pushError(ctx.errors, lineNo, 'Expected a function line like "myFunction:" or "myFunction: optional description".');
+    return;
+  }
+
+  if (RESERVED_FUNCTION_NAMES.has(name)) {
+    pushError(ctx.errors, lineNo, "WHEN, AND, and IT are reserved; indent those lines under a function.");
     return;
   }
 
   ctx.stack.length = 0;
-  const fn: VexFunction = { line: lineNo, name, whens: [] };
+  const fn: VexFunction = { description, line: lineNo, name, whens: [] };
   ctx.document.functions.push(fn);
   ctx.stack.push({ indent: 0, kind: "function", node: fn });
 }
@@ -46,12 +53,12 @@ function processWhenLine(input: {
 }): void {
   const { ctx, label, leadingSpaces, lineNo, parent } = input;
   if (parent == null || parent.kind !== "function") {
-    pushError(ctx.errors, lineNo, 'WHEN must appear directly under a function (indent 2 spaces under "name:").');
+    pushError(ctx.errors, lineNo, "WHEN must appear directly under a function (4 spaces under the function line).");
     return;
   }
 
-  if (leadingSpaces !== 2) {
-    pushError(ctx.errors, lineNo, "WHEN is only allowed at the first list level under a function (indent 2).");
+  if (leadingSpaces !== parent.indent + 4) {
+    pushError(ctx.errors, lineNo, "WHEN must be indented 4 spaces under the function name.");
     return;
   }
 
@@ -75,6 +82,11 @@ function processAndLine(input: {
 
   if (parent.kind === "function" || parent.kind === "it") {
     pushError(ctx.errors, lineNo, "AND must appear under a WHEN or another AND.");
+    return;
+  }
+
+  if (leadingSpaces !== parent.indent + 4) {
+    pushError(ctx.errors, lineNo, "AND must be indented one level (4 spaces) deeper than its parent.");
     return;
   }
 
@@ -110,6 +122,11 @@ function processItLine(input: {
     return;
   }
 
+  if (leadingSpaces !== parent.indent + 4) {
+    pushError(ctx.errors, lineNo, "IT must be indented one level (4 spaces) deeper than its parent.");
+    return;
+  }
+
   if (parent.kind === "function") {
     pushError(ctx.errors, lineNo, "IT must appear under a WHEN or AND, not directly under a function.");
     return;
@@ -139,7 +156,7 @@ function processListLine(input: { content: string; ctx: ParseContext; leadingSpa
   const { content, ctx, leadingSpaces, lineNo } = input;
   const { keyword, label } = parseListLineParts(content);
   if (keyword == null) {
-    pushError(ctx.errors, lineNo, 'Expected a list item starting with "- WHEN:", "- AND:", or "- IT:".');
+    pushError(ctx.errors, lineNo, 'Expected a line starting with "WHEN:", "AND:", or "IT:".');
     return;
   }
 
@@ -191,15 +208,35 @@ export function processVexLine(input: { ctx: ParseContext; line: { lineNo: numbe
   const leadingSpaces = countLeadingSpaces(rawLine);
   const content = rawLine.slice(leadingSpaces);
 
-  if (leadingSpaces % 2 !== 0) {
-    pushError(ctx.errors, lineNo, "Indentation must use a multiple of 2 spaces.");
+  if (leadingSpaces !== 0 && leadingSpaces % 4 !== 0) {
+    pushError(ctx.errors, lineNo, "Indentation must use a multiple of 4 spaces.");
     return;
   }
 
-  if (!content.startsWith("-")) {
-    processFunctionDeclarationLine({ content, ctx, leadingSpaces, lineNo });
+  const { keyword } = parseListLineParts(content);
+  if (keyword != null) {
+    if (leadingSpaces === 0) {
+      pushError(
+        ctx.errors,
+        lineNo,
+        "WHEN, AND, and IT lines must be indented under a function (multiples of 4 spaces).",
+      );
+      return;
+    }
+
+    if (leadingSpaces < 4) {
+      pushError(ctx.errors, lineNo, "The first WHEN under a function must be indented with at least 4 spaces.");
+      return;
+    }
+
+    processListLine({ content, ctx, leadingSpaces, lineNo });
     return;
   }
 
-  processListLine({ content, ctx, leadingSpaces, lineNo });
+  if (leadingSpaces !== 0) {
+    pushError(ctx.errors, lineNo, 'Expected a line starting with "WHEN:", "AND:", or "IT:" at the correct indent.');
+    return;
+  }
+
+  processFunctionDeclarationLine({ content, ctx, leadingSpaces, lineNo });
 }

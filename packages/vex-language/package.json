@@ -3,6 +3,7 @@
   "displayName": "Vex spec (.vex)",
   "description": "Syntax highlighting and live validation for .vex specification files (uses workspace vexkit + Bun).",
   "version": "0.0.3",
+  "private": true,
   "publisher": "vex-app",
   "engines": {
     "vscode": "^1.84.0"
@@ -24,11 +25,7 @@
         "extensions": [
           ".vex"
         ],
-        "configuration": "./language-configuration.json",
-        "icon": {
-          "dark": "./icons/vex-app-logo.png",
-          "light": "./icons/vex-app-logo.png"
-        }
+        "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
@@ -38,5 +35,8 @@
         "scopeName": "source.vex"
       }
     ]
+  },
+  "scripts": {
+    "lint": "node --check extension.js"
   }
 }

@@ -33,7 +33,7 @@ describe("parseAndValidateVexDocument", () => {
   describe("WHEN a WHEN is missing an IT", () => {
     describe("AND the WHEN has no branches", () => {
       it("returns ok false", () => {
-        const result = parseAndValidateVexDocument(`fn:\n  - WHEN: only when\n`);
+        const result = parseAndValidateVexDocument(`fn:\n    WHEN: only when\n`);
         expect(result.ok).toBe(false);
       });
     });

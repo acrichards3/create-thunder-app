@@ -1,0 +1,9 @@
+src/
+scripts/
+tsconfig.json
+node_modules/**
+bun.lock
+.git/**
+*.vsix
+*.log
+dist/extension.js

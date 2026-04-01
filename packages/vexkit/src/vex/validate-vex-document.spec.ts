@@ -3,7 +3,7 @@ import { parseAndValidateVexDocument } from "./parse-and-validate-vex-document";
 import { parseVexDocument } from "./parse-vex-document";
 import { validateVexDocument } from "./validate-vex-document";
 
-const twoSiblingItsSource = "todo:\n  - WHEN: x\n    - IT: first\n    - IT: second\n";
+const twoSiblingItsSource = "todo:\n    WHEN: x\n        IT: first\n        IT: second\n";
 
 describe("validateVexDocument", () => {
   describe("WHEN a WHEN has two IT lines at the same list level", () => {

@@ -2,7 +2,7 @@
   "name": "@vex-app/vexkit",
   "version": "0.0.0",
   "type": "module",
-  "description": "Dev tooling for the Vex spec-first workflow (.vex format, codegen, local dashboard)",
+  "description": "Dev tooling for the Vex spec-first workflow (.vex format, codegen, Feature Workflow API for Cursor)",
   "license": "MIT",
   "bin": {
     "vexkit": "./src/cli.ts"

@@ -78,7 +78,7 @@
     "lib",
     "backend",
     "packages/vexkit",
-    "packages/mcp-feature-workflow"
+    "packages/vex-language"
   ],
   "scripts": {
     "build": "bun run build:lib && bun run build:vexkit && bun run typecheck && bun run lint && bun run build:frontend && bun run build:backend",
@@ -109,7 +109,8 @@
     "test:db:down": "docker compose -f docker-compose.test.yml down",
     "typecheck": "bun tsc -b --clean && bun tsc -b",
     "verify:vexkit": "bun run build:vexkit && bun run --filter @vex-app/vexkit lint && bun run --filter @vex-app/vexkit typecheck && bun run --filter @vex-app/vexkit test",
-    "vexkit:spec": "bun ./packages/vexkit/src/cli.ts dashboard"
+    "feature-workflow:vsix": "cd packages/cursor-feature-workflow && bun run vsix",
+    "feature-workflow:install": "cd packages/cursor-feature-workflow && bun run vsix:install"
   },
   "devDependencies": {
     "@types/bun": "^1.3.5",

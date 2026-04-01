@@ -8,19 +8,19 @@
       "name": "comment.line.number-sign.vex"
     },
     "function-header": {
-      "match": "^([a-zA-Z0-9_/.\\-]+)\\s*:\\s*$",
+      "match": "^([a-zA-Z0-9_/.\\-]+)\\s*:\\s*(.*)$",
       "captures": {
-        "1": { "name": "entity.name.function.vex" }
+        "1": { "name": "entity.name.function.vex" },
+        "2": { "name": "string.unquoted.description.vex" }
       }
     },
     "list-item": {
-      "match": "^(\\s*)(-\\s*)(WHEN|AND|IT)(:)(.*)$",
+      "match": "^(\\s*)(WHEN|AND|IT)(:)(.*)$",
       "captures": {
         "1": { "name": "meta.indent.vex" },
-        "2": { "name": "punctuation.definition.list.begin.vex" },
-        "3": { "name": "keyword.control.vex" },
-        "4": { "name": "punctuation.separator.key-value.vex" },
-        "5": { "name": "string.unquoted.description.vex" }
+        "2": { "name": "keyword.control.vex" },
+        "3": { "name": "punctuation.separator.key-value.vex" },
+        "4": { "name": "string.unquoted.description.vex" }
       }
     },
     "vex-root": {

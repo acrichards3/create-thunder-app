@@ -19,6 +19,10 @@ const TREE_LAYOUT_MIN_BREADTH = 340;
 const DASHBOARD_VIEW_STORAGE_KEY = "vexkit.dashboard.view.v1";
 const WORKFLOW_STEP_LABELS = ["Describe", "Spec", "Approve", "Build", "Verify", "Done"];
 
+function isIdeEmbedChatDisabled() {
+  return typeof globalThis !== "undefined" && globalThis.__FEATURE_WORKFLOW_IDE_EMBED === true;
+}
+
 function wireWorkflowRevertModal() {
   const overlay = document.getElementById("workflow-revert-modal-overlay");
   const bodyEl = document.getElementById("workflow-revert-modal-body");
@@ -147,6 +151,9 @@ function loadDashboardView() {
   } catch {
     /* ignore corrupt or unavailable storage */
   }
+  if (isIdeEmbedChatDisabled()) {
+    state.assistantCollapsed = false;
+  }
 }
 
 function setWorkflowStatus(text, isErr) {
@@ -188,6 +195,20 @@ async function runCodegenSpecForCurrentPath() {
   }
   setWorkflowStatus(`Wrote ${typeof data.wrote === "string" ? data.wrote : "spec"}.`);
   return true;
+}
+
+async function runIdeWorkflowVerify() {
+  setWorkflowStatus("Running verification…");
+  const res = await fetch("/api/workflow/verify", { method: "POST" });
+  const data = await res.json();
+  if (res.ok && data.ok === true) {
+    setWorkflowStatus("");
+    setWorkflowStep(5);
+    return;
+  }
+  setWorkflowStep(3);
+  const log = typeof data.log === "string" ? data.log : "Verification failed.";
+  setWorkflowStatus(log.length > 400 ? `${log.slice(0, 400)}…` : log, true);
 }
 
 function syncLogicCanvasSpecEditClass() {
@@ -280,11 +301,15 @@ function renderWorkflowStepper() {
     btn.setAttribute("aria-controls", `workflow-tabpanel-${String(i)}`);
     btn.setAttribute("aria-selected", current === i ? "true" : "false");
     btn.setAttribute("role", "tab");
-    if (i > current) {
+    const ideNext = isIdeEmbedChatDisabled() && i === current + 1 && current < 5;
+    if (i > current && !ideNext) {
       btn.disabled = true;
       btn.setAttribute("aria-disabled", "true");
       btn.setAttribute("title", "Complete earlier steps first");
       btn.setAttribute("aria-label", `${label} (locked)`);
+    } else if (ideNext) {
+      btn.setAttribute("title", `Go to ${label}`);
+      btn.setAttribute("aria-label", `Go to ${label}`);
     } else if (i < current) {
       btn.setAttribute("title", `Go back to ${label}`);
       btn.setAttribute("aria-label", `Go back to ${label}`);
@@ -298,6 +323,8 @@ function renderWorkflowStepper() {
       btn.classList.add("stepper-node--past");
     } else if (i === current) {
       btn.classList.add("stepper-node--current");
+    } else if (ideNext) {
+      btn.classList.add("stepper-node--next");
     } else {
       btn.classList.add("stepper-node--future");
     }
@@ -313,6 +340,10 @@ function renderWorkflowStepper() {
     btn.addEventListener("click", () => {
       if (stepIndex < current) {
         openWorkflowRevertModal(stepIndex);
+        return;
+      }
+      if (ideNext) {
+        setWorkflowStep(stepIndex);
       }
     });
     nav.append(btn);
@@ -358,6 +389,25 @@ function renderWorkflowActions() {
     },
     step !== 5,
   );
+
+  if (isIdeEmbedChatDisabled()) {
+    workflowAddButton(
+      buildEl,
+      "Continue to Verify",
+      () => {
+        setWorkflowStep(4);
+      },
+      step !== 3,
+    );
+    workflowAddButton(
+      verifyEl,
+      "Run verification",
+      () => {
+        void runIdeWorkflowVerify();
+      },
+      step !== 4,
+    );
+  }
 }
 
 function toggleApproval(fnName) {
@@ -1139,6 +1189,75 @@ async function treeHasRelativePath(nodes, relPath) {
   });
 }
 
+function flattenVexPathsFromTree(nodes) {
+  const out = [];
+  function walk(nodeList) {
+    if (!Array.isArray(nodeList)) {
+      return;
+    }
+    for (const n of nodeList) {
+      if (typeof n.name === "string" && n.name.endsWith(".vex") && typeof n.relativePath === "string") {
+        out.push(n.relativePath);
+      }
+      if (n.children != null) {
+        walk(n.children);
+      }
+    }
+  }
+  walk(nodes);
+  return [...out].sort((a, b) => a.localeCompare(b));
+}
+
+let ideVexSwitcherWired = false;
+
+function ensureIdeVexSwitcherWired() {
+  if (ideVexSwitcherWired || !isIdeEmbedChatDisabled()) {
+    return;
+  }
+  const sel = document.getElementById("vex-file-switcher");
+  if (sel == null) {
+    return;
+  }
+  ideVexSwitcherWired = true;
+  sel.addEventListener("change", () => {
+    const v = sel.value;
+    if (v.length === 0) {
+      return;
+    }
+    void openVexFile(v);
+    const api = globalThis.__VEXKIT_VSCODE;
+    if (api != null && typeof api.postMessage === "function") {
+      api.postMessage({ type: "open-file", path: v });
+    }
+  });
+}
+
+function syncVexFileSwitcher() {
+  if (!isIdeEmbedChatDisabled()) {
+    return;
+  }
+  ensureIdeVexSwitcherWired();
+  const sel = document.getElementById("vex-file-switcher");
+  if (sel == null) {
+    return;
+  }
+  const paths = flattenVexPathsFromTree(state.tree);
+  sel.replaceChildren();
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = paths.length === 0 ? "No .vex files in project" : "Choose a .vex file…";
+  sel.append(placeholder);
+  for (const p of paths) {
+    const opt = document.createElement("option");
+    opt.value = p;
+    opt.textContent = p;
+    sel.append(opt);
+  }
+  if (state.currentPath != null && paths.includes(state.currentPath)) {
+    sel.value = state.currentPath;
+  }
+}
+
 async function refreshTree() {
   const res = await fetch("/api/tree");
   if (!res.ok) {
@@ -1149,6 +1268,7 @@ async function refreshTree() {
   state.tree = data.tree;
   document.getElementById("header-root").textContent = data.root;
   renderFileTree();
+  syncVexFileSwitcher();
 }
 
 function updateMainPanel() {
@@ -1261,6 +1381,7 @@ async function openVexFile(relPath, options) {
   saveDashboardView();
   updateMainPanel();
   renderFileTree();
+  syncVexFileSwitcher();
 }
 
 document.getElementById("collapse-all-folders").addEventListener("click", collapseAllExplorerFolders);
@@ -1387,10 +1508,57 @@ function wireSidebarResize() {
   handle.addEventListener("pointercancel", onPointerUp);
 }
 
+function syncIdeAssistantPanelFromState() {
+  if (!isIdeEmbedChatDisabled()) {
+    return;
+  }
+  const layout = document.getElementById("layout");
+  const btn = document.getElementById("toggle-assistant");
+  if (layout == null || btn == null) {
+    return;
+  }
+  const collapsed = state.assistantCollapsed;
+  layout.classList.toggle("assistant-panel-collapsed", collapsed);
+  btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  btn.textContent = collapsed ? "⟪" : "⟫";
+  btn.setAttribute("title", collapsed ? "Show workflow panel (Ctrl+Shift+L)" : "Hide workflow panel (Ctrl+Shift+L)");
+  btn.setAttribute("aria-label", collapsed ? "Show workflow panel" : "Hide workflow panel");
+}
+
+function wireIdeAssistantToggle() {
+  if (!isIdeEmbedChatDisabled()) {
+    return;
+  }
+  const btn = document.getElementById("toggle-assistant");
+  if (btn == null) {
+    return;
+  }
+  btn.addEventListener("click", () => {
+    state.assistantCollapsed = !state.assistantCollapsed;
+    syncIdeAssistantPanelFromState();
+    saveDashboardView();
+  });
+  window.addEventListener("keydown", (e) => {
+    if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || (e.key !== "l" && e.key !== "L")) {
+      return;
+    }
+    const t = e.target;
+    if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) {
+      return;
+    }
+    e.preventDefault();
+    state.assistantCollapsed = !state.assistantCollapsed;
+    syncIdeAssistantPanelFromState();
+    saveDashboardView();
+  });
+  syncIdeAssistantPanelFromState();
+}
+
 document.getElementById("toggle-explorer").addEventListener("click", toggleExplorerPanel);
 window.addEventListener("keydown", onExplorerHotkey);
 syncExplorerPanel();
 wireSidebarResize();
+wireIdeAssistantToggle();
 
 let assistantControls = null;
 
@@ -1436,16 +1604,18 @@ function handleSpecChangeRequest(reason) {
   cancelBtn.addEventListener("click", onCancel);
 }
 
-assistantControls = initAssistantPanel({
-  onSpecChangeRequest: handleSpecChangeRequest,
-  onStartNew: () => {
-    state.approvalsByPath = {};
-    setWorkflowStep(0);
-  },
-  onStepChange: handleStepChange,
-  saveDashboardView,
-  state,
-});
+if (!isIdeEmbedChatDisabled()) {
+  assistantControls = initAssistantPanel({
+    onSpecChangeRequest: handleSpecChangeRequest,
+    onStartNew: () => {
+      state.approvalsByPath = {};
+      setWorkflowStep(0);
+    },
+    onStepChange: handleStepChange,
+    saveDashboardView,
+    state,
+  });
+}
 
 function scheduleReloadFromWatch() {
   if (watchReloadTimer != null) {
@@ -1499,3 +1669,7 @@ void (async () => {
   }
   renderWorkflowBar();
 })();
+
+window.__vexkitOpenVexFile = function (relPath) {
+  void openVexFile(relPath, { resetFunctionIndex: true });
+};

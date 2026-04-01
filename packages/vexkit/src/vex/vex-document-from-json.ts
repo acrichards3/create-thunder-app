@@ -33,6 +33,13 @@ function nameFromUnknown(v: unknown): { name: string | null } {
   return { name: v };
 }
 
+function descriptionFromUnknown(v: unknown): string {
+  if (typeof v !== "string") {
+    return "";
+  }
+  return v;
+}
+
 function vexItFromUnknown(data: unknown): { it: VexIt | null } {
   const rec = isRecord(data);
   if (rec.record == null) {
@@ -136,6 +143,7 @@ function vexFunctionFromUnknown(data: unknown): { fn: VexFunction | null } {
   if (line == null) {
     return { fn: null };
   }
+  const description = descriptionFromUnknown(rec.record.description);
   const whensRaw = rec.record.whens;
   if (!Array.isArray(whensRaw)) {
     return { fn: null };
@@ -148,7 +156,7 @@ function vexFunctionFromUnknown(data: unknown): { fn: VexFunction | null } {
     }
     whens.push(when.when);
   }
-  return { fn: { line, name, whens } };
+  return { fn: { description, line, name, whens } };
 }
 
 export function vexDocumentFromUnknown(data: unknown): { document: VexDocument | null } {

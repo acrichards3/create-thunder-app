@@ -11,27 +11,25 @@ export function countLeadingSpaces(rawLine: string): number {
   return n;
 }
 
-export function parseFunctionNameFromLine(content: string): { name: string | null } {
+const FUNCTION_NAME_PATTERN = /^[a-zA-Z0-9_/.-]+$/;
+
+export function parseFunctionHeaderFromLine(content: string): { description: string; name: string | null } {
   if (content.startsWith("-")) {
-    return { name: null };
+    return { description: "", name: null };
   }
 
-  if (!content.endsWith(":")) {
-    return { name: null };
+  const colonIdx = content.indexOf(":");
+  if (colonIdx < 0) {
+    return { description: "", name: null };
   }
 
-  const core = content.slice(0, -1);
-  if (core.length === 0) {
-    return { name: null };
+  const name = content.slice(0, colonIdx).trim();
+  if (name.length === 0 || !FUNCTION_NAME_PATTERN.test(name)) {
+    return { description: "", name: null };
   }
 
-  for (let i = 0; i < core.length; i += 1) {
-    if (core[i] === " " || core[i] === "\t") {
-      return { name: null };
-    }
-  }
-
-  return { name: core };
+  const description = content.slice(colonIdx + 1).trim();
+  return { description, name };
 }
 
 export type ListKeyword = "AND" | "IT" | "WHEN";
@@ -40,11 +38,7 @@ export function parseListLineParts(content: string): {
   keyword: ListKeyword | null;
   label: string;
 } {
-  if (!content.startsWith("-")) {
-    return { keyword: null, label: "" };
-  }
-
-  const trimmed = content.slice(1).trimStart();
+  const trimmed = content.trimStart();
   const pairs: readonly { keyword: ListKeyword; prefix: string }[] = [
     { keyword: "WHEN", prefix: "WHEN:" },
     { keyword: "AND", prefix: "AND:" },

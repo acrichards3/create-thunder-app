@@ -22,14 +22,14 @@ function popDeeperThan(stack: StackEntry[], leadingSpaces: number): void {
   }
 }
 
-function popWhenSiblingsAtIndent2(stack: StackEntry[]): void {
+function popWhenSiblingsAtIndent4(stack: StackEntry[]): void {
   while (stack.length > 0) {
     const top = stack.at(-1);
     if (top == null) {
       break;
     }
 
-    if (top.indent !== 2) {
+    if (top.indent !== 4) {
       break;
     }
 
@@ -87,8 +87,8 @@ export function popStackForListLine(
 ): boolean {
   popDeeperThan(stack, leadingSpaces);
 
-  if (keyword === "WHEN" && leadingSpaces === 2) {
-    popWhenSiblingsAtIndent2(stack);
+  if (keyword === "WHEN" && leadingSpaces === 4) {
+    popWhenSiblingsAtIndent4(stack);
     return true;
   }
 
