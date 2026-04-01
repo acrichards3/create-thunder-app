@@ -70,6 +70,10 @@ export const SIDEBAR_ITEMS = {
         title: "Project Structure",
       },
       {
+        href: "/vex-spec",
+        title: "Vex spec (.vex)",
+      },
+      {
         href: "/recommendations",
         title: "Recommendations",
       },

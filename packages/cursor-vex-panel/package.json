@@ -1,0 +1,41 @@
+{
+  "name": "cursor-vex-panel",
+  "displayName": "Vex Panel",
+  "description": "Adds a Vex tab to the bottom panel with the workflow progress stepper.",
+  "version": "0.0.1",
+  "private": true,
+  "publisher": "vex-app",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "extension.js",
+  "activationEvents": [
+    "onView:vex.panel.stepper"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "vex-panel",
+          "title": "Vex",
+          "icon": "media/vex-panel.svg"
+        }
+      ]
+    },
+    "views": {
+      "vex-panel": [
+        {
+          "type": "webview",
+          "id": "vex.panel.stepper",
+          "name": "Workflow"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "lint": "node --check extension.js"
+  }
+}

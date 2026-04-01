@@ -78,7 +78,8 @@
     "lib",
     "backend",
     "packages/vexkit",
-    "packages/vex-language"
+    "packages/vex-language",
+    "packages/cursor-vex-panel"
   ],
   "scripts": {
     "build": "bun run build:lib && bun run build:vexkit && bun run typecheck && bun run lint && bun run build:frontend && bun run build:backend",

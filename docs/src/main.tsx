@@ -17,6 +17,7 @@ import { ProjectStructure } from "./pages/docs/project-structure/ProjectStructur
 import { Recommendations } from "./pages/docs/recommendations/Recommendations";
 import { Testing } from "./pages/docs/testing/Testing";
 import { TypeScript } from "./pages/docs/typescript/TypeScript";
+import { VexSpec } from "./pages/docs/vex-spec/VexSpec";
 import { Vite } from "./pages/docs/vite/Vite";
 
 const rootElement = document.getElementById("root");
@@ -91,6 +92,11 @@ const routes = {
     component: TypeScript,
     getParentRoute: () => rootRoute,
     path: "/typescript",
+  }),
+  vexSpec: createRoute({
+    component: VexSpec,
+    getParentRoute: () => rootRoute,
+    path: "/vex-spec",
   }),
   vite: createRoute({
     component: Vite,

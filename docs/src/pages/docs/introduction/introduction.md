@@ -37,5 +37,6 @@ Here's what you get out of the box:
 - **Shared Lib**: Type-safe shared utilities and types between frontend and backend — no duplicating code across packages.
 - **Code Quality**: ESLint, Prettier (configured via `.prettierrc`), and strict TypeScript across all packages.
 - **Development Tools**: Scripts for dev, build, lint, format, typecheck, and database management — everything you need to get productive fast.
+- **Vex spec (`.vex`)**: A small specification language (`describe` / `when` / `and` / `it`) with editor support and a parser in vexkit. See [Vex spec (.vex)](/vex-spec).
 
 With Vex App, skip the setup headaches and jump straight into building the features that matter.
