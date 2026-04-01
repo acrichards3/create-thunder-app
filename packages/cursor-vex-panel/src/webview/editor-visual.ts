@@ -39,10 +39,17 @@ let lastDocument: null | VexDocument = null;
 
 const ZOOM_MIN = 0.1;
 const ZOOM_MAX = 3;
-const ZOOM_STEP = 1.15;
+const ZOOM_STEP = 1.18;
 const FIT_VIEW_MARGIN = 0.92;
+const WHEEL_FRAME_FACTOR_MAX = 1.38;
+const WHEEL_FRAME_FACTOR_MIN = 0.72;
+const WHEEL_ZOOM_EXP_K = 0.0048;
 
 let zoom = 1;
+let wheelAnchorVx = 0;
+let wheelAnchorVy = 0;
+let wheelDeltaAccum = 0;
+let wheelZoomFlushScheduled = false;
 let panDragging = false;
 let dragPointerId: null | number = null;
 let dragLastX = 0;
@@ -155,14 +162,90 @@ function resetView(): void {
   fitTreeToViewport();
 }
 
-function zoomByFactor(factor: number): void {
-  const next = clampZoom(zoom * factor);
-  if (next === zoom) {
+type SvgZoomScrollInput = {
+  anchor: { vx: number; vy: number };
+  ox: number;
+  oy: number;
+  r: number;
+  slBefore: number;
+  stBefore: number;
+  svgLeftInViewport: number;
+  svgTopInViewport: number;
+};
+
+function scheduleScrollAfterZoomTowardSvgPoint(input: SvgZoomScrollInput): void {
+  const { anchor, ox, oy, r, slBefore, stBefore, svgLeftInViewport, svgTopInViewport } = input;
+  requestAnimationFrame(function () {
+    if (!viewportEl) {
+      return;
+    }
+    const v = viewportEl;
+    const nl = slBefore + svgLeftInViewport + ox * r - anchor.vx;
+    const nt = stBefore + svgTopInViewport + oy * r - anchor.vy;
+    const maxLeft = Math.max(0, v.scrollWidth - v.clientWidth);
+    const maxTop = Math.max(0, v.scrollHeight - v.clientHeight);
+    v.scrollLeft = Math.min(maxLeft, Math.max(0, nl));
+    v.scrollTop = Math.min(maxTop, Math.max(0, nt));
+  });
+}
+
+function flushWheelZoom(): void {
+  wheelZoomFlushScheduled = false;
+  if (wheelDeltaAccum === 0) {
     return;
+  }
+  const deltaSum = wheelDeltaAccum;
+  wheelDeltaAccum = 0;
+  const raw = Math.exp(-deltaSum * WHEEL_ZOOM_EXP_K);
+  const factor = Math.min(WHEEL_FRAME_FACTOR_MAX, Math.max(WHEEL_FRAME_FACTOR_MIN, raw));
+  zoomByFactor(factor, { vx: wheelAnchorVx, vy: wheelAnchorVy });
+}
+
+function scheduleWheelZoomFlush(): void {
+  if (wheelZoomFlushScheduled) {
+    return;
+  }
+  wheelZoomFlushScheduled = true;
+  requestAnimationFrame(flushWheelZoom);
+}
+
+function zoomByFactor(factor: number, anchorViewport: { vx: number; vy: number } | undefined): void {
+  if (!viewportEl) {
+    return;
+  }
+  const vp = viewportEl;
+  const oldZoom = zoom;
+  const next = clampZoom(zoom * factor);
+  if (next === oldZoom) {
+    return;
+  }
+  const r = next / oldZoom;
+  const slBefore = vp.scrollLeft;
+  const stBefore = vp.scrollTop;
+  const vpRect = vp.getBoundingClientRect();
+  const svg = contentEl?.querySelector("#tree-wrap svg");
+  let scrollInput: SvgZoomScrollInput | undefined;
+  if (anchorViewport && svg) {
+    const svgRect = svg.getBoundingClientRect();
+    const svgLeftInViewport = svgRect.left - vpRect.left;
+    const svgTopInViewport = svgRect.top - vpRect.top;
+    scrollInput = {
+      anchor: anchorViewport,
+      ox: anchorViewport.vx - svgLeftInViewport,
+      oy: anchorViewport.vy - svgTopInViewport,
+      r,
+      slBefore,
+      stBefore,
+      svgLeftInViewport,
+      svgTopInViewport,
+    };
   }
   zoom = next;
   applySvgZoom();
   updateZoomLabel();
+  if (scrollInput) {
+    scheduleScrollAfterZoomTowardSvgPoint(scrollInput);
+  }
 }
 
 function setupPan(): void {
@@ -178,8 +261,11 @@ function setupPan(): void {
         return;
       }
       e.preventDefault();
-      const factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
-      zoomByFactor(factor);
+      const rect = vp.getBoundingClientRect();
+      wheelAnchorVx = e.clientX - rect.left;
+      wheelAnchorVy = e.clientY - rect.top;
+      wheelDeltaAccum += e.deltaY;
+      scheduleWheelZoomFlush();
     },
     { passive: false },
   );
@@ -234,12 +320,24 @@ function setupZoomControls(): void {
   const zoomReset = document.getElementById("vex-ed-zoom-reset");
   if (zoomIn) {
     zoomIn.addEventListener("click", function onZoomIn() {
-      zoomByFactor(ZOOM_STEP);
+      if (!viewportEl) {
+        return;
+      }
+      zoomByFactor(ZOOM_STEP, {
+        vx: viewportEl.clientWidth / 2,
+        vy: viewportEl.clientHeight / 2,
+      });
     });
   }
   if (zoomOut) {
     zoomOut.addEventListener("click", function onZoomOut() {
-      zoomByFactor(1 / ZOOM_STEP);
+      if (!viewportEl) {
+        return;
+      }
+      zoomByFactor(1 / ZOOM_STEP, {
+        vx: viewportEl.clientWidth / 2,
+        vy: viewportEl.clientHeight / 2,
+      });
     });
   }
   if (zoomReset) {
