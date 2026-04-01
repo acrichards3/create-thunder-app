@@ -33,8 +33,8 @@ describe("serializeVexDocument", () => {
         if (!second.ok || second.document == null) {
           throw new Error("round-trip parse failed");
         }
-        const namesA = first.document.functions.map((f) => f.name);
-        const namesB = second.document.functions.map((f) => f.name);
+        const namesA = first.document.describes.map((d) => d.label);
+        const namesB = second.document.describes.map((d) => d.label);
         expect(namesB).toEqual(namesA);
       });
     });

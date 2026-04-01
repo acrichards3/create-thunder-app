@@ -12,13 +12,14 @@ describe("vexDocumentFromUnknown", () => {
   });
 
   describe("WHEN data is a valid minimal document object", () => {
-    describe("AND the first function name is inspected", () => {
+    describe("AND the first describe label is inspected", () => {
       it("is x", () => {
         const r = vexDocumentFromUnknown({
-          functions: [
+          describes: [
             {
+              label: "x",
               line: 1,
-              name: "x",
+              nestedDescribes: [],
               whens: [
                 {
                   branches: [{ kind: "it", label: "t", line: 3 }],
@@ -32,7 +33,7 @@ describe("vexDocumentFromUnknown", () => {
         if (r.document == null) {
           throw new Error("expected document");
         }
-        expect(r.document.functions[0]?.name).toBe("x");
+        expect(r.document.describes[0]?.label).toBe("x");
       });
     });
   });

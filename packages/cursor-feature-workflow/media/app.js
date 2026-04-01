@@ -7148,7 +7148,7 @@ function syncLogicCanvasSpecEditClass() {
   viewport.classList.toggle("logic-canvas--spec-edit", canSpecEdit);
   if (canvasHint != null && specOk) {
     const doc = state.parseResult?.document;
-    const fn = doc?.functions?.[state.selectedFnIndex];
+    const fn = doc?.describes?.[state.selectedFnIndex];
     if (fn != null) {
       const hasWhens = Array.isArray(fn.whens) && fn.whens.length > 0;
       if (hasWhens) {
@@ -7171,7 +7171,7 @@ function getApprovedFnNames() {
 }
 function areAllFnsApproved() {
   const doc = state.parseResult != null && state.parseResult.ok ? state.parseResult.document : null;
-  const fnNames = doc != null && Array.isArray(doc.functions) ? doc.functions.map((f) => f.name) : [];
+  const fnNames = doc != null && Array.isArray(doc.describes) ? doc.describes.map((d) => d.label) : [];
   if (fnNames.length === 0) {
     return false;
   }
@@ -7383,7 +7383,7 @@ function renderWorkflowApprovals(fnNames) {
 }
 function renderWorkflowBar() {
   const doc = state.parseResult != null && state.parseResult.ok ? state.parseResult.document : null;
-  const fnNames = doc != null && Array.isArray(doc.functions) ? doc.functions.map((f) => f.name) : [];
+  const fnNames = doc != null && Array.isArray(doc.describes) ? doc.describes.map((d) => d.label) : [];
   renderWorkflowStepper();
   renderWorkflowActions();
   renderWorkflowApprovals(fnNames);
@@ -7422,8 +7422,8 @@ var graphView = {
   ty: 0
 };
 function kindLabel(kind) {
-  if (kind === "fn") {
-    return "Function";
+  if (kind === "describe") {
+    return "Describe";
   }
   if (kind === "when") {
     return "When";
@@ -7440,25 +7440,30 @@ function branchToTree(body, path2) {
   const kids = body.child ? [branchToTree(body.child, [...path2, 0])] : [];
   return { children: kids, kind: "and", label: body.label, line: body.line, vexPath: path2 };
 }
-function whenToTree(when, fnIndex, whenIndex) {
-  const basePath = [fnIndex, whenIndex];
+function whenToTree(when, pathToWhen) {
   return {
-    children: when.branches.map((b, bi) => branchToTree(b, [...basePath, bi])),
+    children: when.branches.map((b, bi) => branchToTree(b, [...pathToWhen, bi])),
     kind: "when",
     label: when.label,
     line: when.line,
-    vexPath: basePath
+    vexPath: pathToWhen
   };
 }
-function treeDataFromFunction(fn, fnIndex) {
-  const whens = Array.isArray(fn.whens) ? fn.whens : [];
+function describeBlockToTree(block, describePath) {
+  const nestedDescribes = Array.isArray(block.nestedDescribes) ? block.nestedDescribes : [];
+  const whens = Array.isArray(block.whens) ? block.whens : [];
+  const nestedKids = nestedDescribes.map((nb, ni) => describeBlockToTree(nb, [...describePath, ni]));
+  const whenKids = whens.map((w, wi) => whenToTree(w, [...describePath, "w", wi]));
   return {
-    children: whens.map((w, wi) => whenToTree(w, fnIndex, wi)),
-    kind: "fn",
-    label: fn.name,
-    line: fn.line,
-    vexPath: [fnIndex]
+    children: [...nestedKids, ...whenKids],
+    kind: "describe",
+    label: block.label,
+    line: block.line,
+    vexPath: describePath
   };
+}
+function treeDataFromRootDescribe(block, rootIndex) {
+  return describeBlockToTree(block, [rootIndex]);
 }
 function cloneVexDocument(doc) {
   if (typeof structuredClone === "function") {
@@ -7488,47 +7493,76 @@ function updateBranchesAt(branches, path2, newLabel) {
     return updateBodyLabel(body, tail, newLabel);
   });
 }
-function updateNodeLabel(doc, segments, newLabel) {
-  if (segments.length === 1) {
-    const fi2 = segments[0];
+function updateNestedDescribeLabel(block, idxPath, newLabel) {
+  if (idxPath.length === 1) {
+    const j = idxPath[0];
     return {
-      ...doc,
-      functions: doc.functions.map((f, i) => i === fi2 ? { ...f, name: newLabel } : f)
+      ...block,
+      nestedDescribes: block.nestedDescribes.map((n, k) => (k === j ? { ...n, label: newLabel } : n))
     };
   }
-  if (segments.length === 2) {
-    const [fi2, wi2] = segments;
+  const [head, ...tail] = idxPath;
+  return {
+    ...block,
+    nestedDescribes: block.nestedDescribes.map((n, k) =>
+      k === head ? updateNestedDescribeLabel(n, tail, newLabel) : n
+    )
+  };
+}
+function updateDescribeLabelDoc(doc, seg, newLabel) {
+  if (seg.length === 1) {
+    const ix = seg[0];
     return {
       ...doc,
-      functions: doc.functions.map((f, i) => {
-        if (i !== fi2) {
-          return f;
-        }
-        return {
-          ...f,
-          whens: f.whens.map((w, j) => j === wi2 ? { ...w, label: newLabel } : w)
-        };
-      })
+      describes: doc.describes.map((d, i) => (i === ix ? { ...d, label: newLabel } : d))
     };
   }
-  const [fi, wi, ...rest] = segments;
+  const [top, ...rest] = seg;
   return {
     ...doc,
-    functions: doc.functions.map((f, i) => {
-      if (i !== fi) {
-        return f;
-      }
-      return {
-        ...f,
-        whens: f.whens.map((w, j) => {
-          if (j !== wi) {
-            return w;
-          }
-          return { ...w, branches: updateBranchesAt(w.branches, rest, newLabel) };
-        })
-      };
-    })
+    describes: doc.describes.map((d, i) => (i === top ? updateNestedDescribeLabel(d, rest, newLabel) : d))
   };
+}
+function updateWhenOrBranch(w, branchRest, newLabel) {
+  if (branchRest.length === 0) {
+    return { ...w, label: newLabel };
+  }
+  return { ...w, branches: updateBranchesAt(w.branches, branchRest, newLabel) };
+}
+function updateWhenInDescribeBlock(block, nestedPath, wi, branchRest, newLabel) {
+  if (nestedPath.length === 0) {
+    return {
+      ...block,
+      whens: block.whens.map((w, j) => (j !== wi ? w : updateWhenOrBranch(w, branchRest, newLabel)))
+    };
+  }
+  const [h, ...t] = nestedPath;
+  return {
+    ...block,
+    nestedDescribes: block.nestedDescribes.map((n, j) =>
+      j === h ? updateWhenInDescribeBlock(n, t, wi, branchRest, newLabel) : n
+    )
+  };
+}
+function updateWhenLabelAt(doc, describePath, wi, branchRest, newLabel) {
+  const [top, ...nestedPath] = describePath;
+  return {
+    ...doc,
+    describes: doc.describes.map((d, i) =>
+      i === top ? updateWhenInDescribeBlock(d, nestedPath, wi, branchRest, newLabel) : d
+    )
+  };
+}
+function updateNodeLabel(doc, segments, newLabel) {
+  const wIdx = segments.indexOf("w");
+  if (wIdx === -1) {
+    return updateDescribeLabelDoc(doc, segments, newLabel);
+  }
+  const describePath = segments.slice(0, wIdx);
+  const afterW = segments.slice(wIdx + 1);
+  const wi = afterW[0];
+  const branchRest = afterW.slice(1);
+  return updateWhenLabelAt(doc, describePath, wi, branchRest, newLabel);
 }
 function closeVexNodeEditDialog() {
   const overlay = document.getElementById("vex-node-edit-overlay");
@@ -7956,7 +7990,7 @@ function renderLogicGraph(fn) {
   const nodesLayer = document.createElementNS(NS, "g");
   panRoot.append(linksLayer, nodesLayer);
   svg2.append(defs, panRoot);
-  const data = treeDataFromFunction(fn, state.selectedFnIndex);
+  const data = treeDataFromRootDescribe(fn, state.selectedFnIndex);
   const hierarchyRoot = layoutHierarchy(data);
   hierarchyRoot.each((d) => {
     measureNode(d);
@@ -8145,21 +8179,21 @@ function updateMainPanel() {
       return;
     }
     const doc = state.parseResult.document;
-    if (doc == null || doc.functions.length === 0) {
+    if (doc == null || doc.describes.length === 0) {
       errBox.hidden = false;
-      errBox.textContent = "No functions in document.";
+      errBox.textContent = "No describe blocks in document.";
       return;
     }
-    const fnCount = doc.functions.length;
+    const fnCount = doc.describes.length;
     if (state.selectedFnIndex >= fnCount) {
       state.selectedFnIndex = fnCount - 1;
     }
-    for (let i = 0; i < doc.functions.length; i += 1) {
-      const fn2 = doc.functions[i];
+    for (let i = 0; i < doc.describes.length; i += 1) {
+      const fn2 = doc.describes[i];
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = i === state.selectedFnIndex ? "fn-btn active" : "fn-btn";
-      btn.textContent = fn2.name;
+      btn.textContent = fn2.label;
       const idx = i;
       btn.addEventListener("click", () => {
         state.selectedFnIndex = idx;
@@ -8172,7 +8206,7 @@ function updateMainPanel() {
     const canvasHint = document.querySelector(".logic-canvas-hint");
     void logicTree.offsetHeight;
     void viewportEl.offsetHeight;
-    const fn = doc.functions[state.selectedFnIndex];
+    const fn = doc.describes[state.selectedFnIndex];
     if (canvasHint != null) {
       const hasWhens = Array.isArray(fn.whens) && fn.whens.length > 0;
       if (hasWhens) {

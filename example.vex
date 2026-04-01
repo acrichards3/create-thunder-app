@@ -1,0 +1,8 @@
+describe: Calculator
+    describe: Add two numbers
+        when: both numbers are in fact numbers
+            and: both numbers are positive
+                it: should return the two numbers added together
+    describe: This is a second function contained within calculator
+        when: something else
+            it: does another thing

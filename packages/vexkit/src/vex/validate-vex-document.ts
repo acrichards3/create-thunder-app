@@ -1,4 +1,4 @@
-import type { VexBody, VexDocument, VexParseError, VexWhen } from "./ast";
+import type { VexBody, VexDescribeBlock, VexDocument, VexParseError, VexWhen } from "./ast";
 
 function countItNodes(body: VexBody | undefined): number {
   if (body == null) {
@@ -16,7 +16,7 @@ function collectStructureErrors(body: VexBody | undefined, path: string): VexPar
   const out: VexParseError[] = [];
 
   if (body == null) {
-    out.push({ line: 0, message: `${path}: missing body (add an IT or AND chain).` });
+    out.push({ line: 0, message: `${path}: missing body (add an it or and chain).` });
     return out;
   }
 
@@ -27,20 +27,20 @@ function collectStructureErrors(body: VexBody | undefined, path: string): VexPar
   if (body.child == null) {
     out.push({
       line: body.line,
-      message: `${path} (AND "${body.label}"): missing child; add a nested AND or an IT.`,
+      message: `${path} (and "${body.label}"): missing child; add a nested and or an it.`,
     });
     return out;
   }
 
-  return out.concat(collectStructureErrors(body.child, `${path} > AND "${body.label}"`));
+  return out.concat(collectStructureErrors(body.child, `${path} > and "${body.label}"`));
 }
 
-function validateWhenBranch(fnName: string, when: VexWhen): VexParseError[] {
-  const path = `Function "${fnName}" > WHEN "${when.label}"`;
+function validateWhenBranch(pathPrefix: string, when: VexWhen): VexParseError[] {
+  const path = `${pathPrefix} > when "${when.label}"`;
   const branchErrors: VexParseError[] = [];
 
   if (when.branches.length === 0) {
-    branchErrors.push({ line: when.line, message: `${path}: add at least one branch (an IT or AND chain).` });
+    branchErrors.push({ line: when.line, message: `${path}: add at least one branch (an it or and chain).` });
     return branchErrors;
   }
 
@@ -49,7 +49,7 @@ function validateWhenBranch(fnName: string, when: VexWhen): VexParseError[] {
     const extra = directIts[1];
     branchErrors.push({
       line: extra.line,
-      message: `${path}: a WHEN may have at most one IT at this level; use AND for additional branches.`,
+      message: `${path}: a when may have at most one it at this level; use and for additional branches.`,
     });
   }
 
@@ -67,27 +67,49 @@ function validateWhenBranch(fnName: string, when: VexWhen): VexParseError[] {
 
     branchErrors.push({
       line: branch.line,
-      message: `${branchPath}: expected exactly one IT (found ${String(itCount)}).`,
+      message: `${branchPath}: expected exactly one it (found ${String(itCount)}).`,
     });
   }
 
   return branchErrors;
 }
 
+function collectDuplicateLabelsInSiblings(blocks: readonly VexDescribeBlock[], path: string): VexParseError[] {
+  const seen = new Set<string>();
+  const out: VexParseError[] = [];
+  for (const b of blocks) {
+    if (seen.has(b.label)) {
+      out.push({ line: b.line, message: `${path}: duplicate describe label "${b.label}" among siblings.` });
+    }
+    seen.add(b.label);
+  }
+  return out;
+}
+
+function validateDescribeBlock(block: VexDescribeBlock, pathPrefix: string): VexParseError[] {
+  const errors: VexParseError[] = [];
+  const path = `${pathPrefix}describe "${block.label}"`;
+
+  errors.push(...collectDuplicateLabelsInSiblings(block.nestedDescribes, path));
+
+  for (const nested of block.nestedDescribes) {
+    errors.push(...validateDescribeBlock(nested, `${path} > `));
+  }
+
+  for (const when of block.whens) {
+    errors.push(...validateWhenBranch(path, when));
+  }
+
+  return errors;
+}
+
 export function validateVexDocument(document: VexDocument): readonly VexParseError[] {
   const errors: VexParseError[] = [];
-  const seenNames = new Set<string>();
 
-  for (const fn of document.functions) {
-    if (seenNames.has(fn.name)) {
-      errors.push({ line: fn.line, message: `Duplicate function name "${fn.name}".` });
-    }
+  errors.push(...collectDuplicateLabelsInSiblings(document.describes, "Document"));
 
-    seenNames.add(fn.name);
-
-    for (const when of fn.whens) {
-      errors.push(...validateWhenBranch(fn.name, when));
-    }
+  for (const root of document.describes) {
+    errors.push(...validateDescribeBlock(root, ""));
   }
 
   return errors;

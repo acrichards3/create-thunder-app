@@ -1,4 +1,4 @@
-import type { VexBody, VexFunction } from "../vex/ast";
+import type { VexBody, VexDescribeBlock } from "../vex/ast";
 
 type SpecStepTag = "and" | "it" | "when";
 
@@ -7,9 +7,12 @@ export type SpecStep = {
   tag: SpecStepTag;
 };
 
-export function expectedStepsFromVexFunction(fn: VexFunction): SpecStep[] {
+export function expectedStepsFromDescribeBlock(block: VexDescribeBlock): SpecStep[] {
   const out: SpecStep[] = [];
-  for (const w of fn.whens) {
+  for (const nested of block.nestedDescribes) {
+    out.push(...expectedStepsFromDescribeBlock(nested));
+  }
+  for (const w of block.whens) {
     out.push({ key: `WHEN ${w.label}`, tag: "when" });
     for (const b of w.branches) {
       pushBodySteps(b, out);

@@ -8,13 +8,13 @@ export interface FileTreeNode {
 }
 
 export interface VexDocument {
-  functions: VexFunction[];
+  describes: VexDescribeBlock[];
 }
 
-export interface VexFunction {
-  description: string;
+export interface VexDescribeBlock {
+  label: string;
   line: number;
-  name: string;
+  nestedDescribes: VexDescribeBlock[];
   whens: VexWhen[];
 }
 

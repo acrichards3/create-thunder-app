@@ -1,4 +1,4 @@
-import type { VexAnd, VexBody, VexDocument, VexFunction, VexIt, VexWhen } from "./ast";
+import type { VexAnd, VexBody, VexDescribeBlock, VexDocument, VexIt, VexWhen } from "./ast";
 
 function isRecord(v: unknown): { record: Record<string, unknown> | null } {
   if (typeof v !== "object") {
@@ -31,13 +31,6 @@ function nameFromUnknown(v: unknown): { name: string | null } {
     return { name: null };
   }
   return { name: v };
-}
-
-function descriptionFromUnknown(v: unknown): string {
-  if (typeof v !== "string") {
-    return "";
-  }
-  return v;
 }
 
 function vexItFromUnknown(data: unknown): { it: VexIt | null } {
@@ -130,33 +123,44 @@ function vexWhenFromUnknown(data: unknown): { when: VexWhen | null } {
   return { when: { branches, label, line } };
 }
 
-function vexFunctionFromUnknown(data: unknown): { fn: VexFunction | null } {
+function vexDescribeBlockFromUnknown(data: unknown): { block: VexDescribeBlock | null } {
   const rec = isRecord(data);
   if (rec.record == null) {
-    return { fn: null };
+    return { block: null };
   }
-  const { name } = nameFromUnknown(rec.record.name);
+  const { name: label } = nameFromUnknown(rec.record.label);
   const { line } = lineFromUnknown(rec.record.line);
-  if (name == null) {
-    return { fn: null };
+  if (label == null) {
+    return { block: null };
   }
   if (line == null) {
-    return { fn: null };
+    return { block: null };
   }
-  const description = descriptionFromUnknown(rec.record.description);
+  const nestedRaw = rec.record.nestedDescribes;
+  if (!Array.isArray(nestedRaw)) {
+    return { block: null };
+  }
+  const nestedDescribes: VexDescribeBlock[] = [];
+  for (const n of nestedRaw) {
+    const b = vexDescribeBlockFromUnknown(n);
+    if (b.block == null) {
+      return { block: null };
+    }
+    nestedDescribes.push(b.block);
+  }
   const whensRaw = rec.record.whens;
   if (!Array.isArray(whensRaw)) {
-    return { fn: null };
+    return { block: null };
   }
   const whens: VexWhen[] = [];
   for (const w of whensRaw) {
     const when = vexWhenFromUnknown(w);
     if (when.when == null) {
-      return { fn: null };
+      return { block: null };
     }
     whens.push(when.when);
   }
-  return { fn: { description, line, name, whens } };
+  return { block: { label, line, nestedDescribes, whens } };
 }
 
 export function vexDocumentFromUnknown(data: unknown): { document: VexDocument | null } {
@@ -164,17 +168,17 @@ export function vexDocumentFromUnknown(data: unknown): { document: VexDocument |
   if (rec.record == null) {
     return { document: null };
   }
-  const functionsRaw = rec.record.functions;
-  if (!Array.isArray(functionsRaw)) {
+  const describesRaw = rec.record.describes;
+  if (!Array.isArray(describesRaw)) {
     return { document: null };
   }
-  const functions: VexFunction[] = [];
-  for (const f of functionsRaw) {
-    const fn = vexFunctionFromUnknown(f);
-    if (fn.fn == null) {
+  const describes: VexDescribeBlock[] = [];
+  for (const d of describesRaw) {
+    const b = vexDescribeBlockFromUnknown(d);
+    if (b.block == null) {
       return { document: null };
     }
-    functions.push(fn.fn);
+    describes.push(b.block);
   }
-  return { document: { functions } };
+  return { document: { describes } };
 }

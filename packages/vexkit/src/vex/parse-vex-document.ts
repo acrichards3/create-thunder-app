@@ -7,7 +7,7 @@ function pushError(errors: VexParseError[], line: number, message: string): void
 
 export function parseVexDocument(source: string): VexParseResult {
   const errors: VexParseError[] = [];
-  const document: VexDocument = { functions: [] };
+  const document: VexDocument = { describes: [] };
   const ctx: ParseContext = { document, errors, stack: [] };
 
   const lines = source.split(/\r?\n/);
@@ -18,8 +18,8 @@ export function parseVexDocument(source: string): VexParseResult {
     processVexLine({ ctx, line: { lineNo, rawLine } });
   }
 
-  if (document.functions.length === 0 && errors.length === 0) {
-    pushError(errors, 1, 'Expected at least one function block (a line like "myFunction:").');
+  if (document.describes.length === 0 && errors.length === 0) {
+    pushError(errors, 1, 'Expected at least one describe block (a line like "describe: Label").');
   }
 
   const ok = errors.length === 0;

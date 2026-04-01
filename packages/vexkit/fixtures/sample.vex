@@ -1,19 +1,19 @@
-functionName1:
-    WHEN: something happens
-        AND: another thing happens
-            IT: does a thing
-    WHEN: something else happens
-        IT: does something else
+describe: functionName1
+    when: something happens
+        and: another thing happens
+            it: does a thing
+    when: something else happens
+        it: does something else
 
-functionName2:
-    WHEN: something happens
-        AND: another thing happens
-            IT: does a thing
-    WHEN: something else happens
-        IT: does something else
-    WHEN: the last thing happens
-        AND: its really the last
-            AND: we go one level deeper just because
-                IT: Finally ends
-        AND: just kidding THIS is the end
-            IT: ends for real
+describe: functionName2
+    when: something happens
+        and: another thing happens
+            it: does a thing
+    when: something else happens
+        it: does something else
+    when: the last thing happens
+        and: its really the last
+            and: we go one level deeper just because
+                it: Finally ends
+        and: just kidding THIS is the end
+            it: ends for real

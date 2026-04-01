@@ -1,0 +1,13 @@
+{
+  "iconDefinitions": {
+    "_vex_logo": {
+      "iconPath": "./icons/vex-app-logo.png"
+    }
+  },
+  "fileExtensions": {
+    "vex": "_vex_logo"
+  },
+  "languageIds": {
+    "vex": "_vex_logo"
+  }
+}

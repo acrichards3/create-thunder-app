@@ -19,15 +19,15 @@ export type VexWhen = {
   line: number;
 };
 
-export type VexFunction = {
-  description: string;
+export type VexDescribeBlock = {
+  label: string;
   line: number;
-  name: string;
+  nestedDescribes: VexDescribeBlock[];
   whens: VexWhen[];
 };
 
 export type VexDocument = {
-  functions: VexFunction[];
+  describes: VexDescribeBlock[];
 };
 
 export type VexParseError = {

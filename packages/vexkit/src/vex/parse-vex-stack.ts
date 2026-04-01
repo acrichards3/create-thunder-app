@@ -1,13 +1,13 @@
 import type { ListKeyword } from "./parse-vex-line";
-import type { VexAnd, VexFunction, VexIt, VexWhen } from "./ast";
+import type { VexAnd, VexDescribeBlock, VexIt, VexWhen } from "./ast";
 
 export type StackEntry =
   | { indent: number; kind: "and"; node: VexAnd }
-  | { indent: number; kind: "function"; node: VexFunction }
+  | { indent: number; kind: "describe"; node: VexDescribeBlock }
   | { indent: number; kind: "it"; node: VexIt }
   | { indent: number; kind: "when"; node: VexWhen };
 
-function popDeeperThan(stack: StackEntry[], leadingSpaces: number): void {
+export function popDeeperThan(stack: StackEntry[], leadingSpaces: number): void {
   while (stack.length > 0) {
     const top = stack.at(-1);
     if (top == null) {
@@ -22,14 +22,33 @@ function popDeeperThan(stack: StackEntry[], leadingSpaces: number): void {
   }
 }
 
-function popWhenSiblingsAtIndent4(stack: StackEntry[]): void {
+export function popSiblingDescribesAtIndent(stack: StackEntry[], describeIndent: number): void {
   while (stack.length > 0) {
     const top = stack.at(-1);
     if (top == null) {
       break;
     }
 
-    if (top.indent !== 4) {
+    if (top.indent !== describeIndent) {
+      break;
+    }
+
+    if (top.kind !== "describe") {
+      break;
+    }
+
+    stack.pop();
+  }
+}
+
+function popWhenSiblingsAtIndent(stack: StackEntry[], whenIndent: number): void {
+  while (stack.length > 0) {
+    const top = stack.at(-1);
+    if (top == null) {
+      break;
+    }
+
+    if (top.indent !== whenIndent) {
       break;
     }
 
@@ -87,8 +106,8 @@ export function popStackForListLine(
 ): boolean {
   popDeeperThan(stack, leadingSpaces);
 
-  if (keyword === "WHEN" && leadingSpaces === 4) {
-    popWhenSiblingsAtIndent4(stack);
+  if (keyword === "WHEN") {
+    popWhenSiblingsAtIndent(stack, leadingSpaces);
     return true;
   }
 

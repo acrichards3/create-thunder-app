@@ -1,5 +1,5 @@
 import { parseAndValidateVexDocument } from "../vex/parse-and-validate-vex-document";
-import { compareSpecStepLists, expectedStepsFromVexFunction } from "./spec-step-shape";
+import { compareSpecStepLists, expectedStepsFromDescribeBlock } from "./spec-step-shape";
 import { extractSpecStepsFromSource } from "./extract-spec-steps-from-ts";
 
 export function validateVexSpecPair(input: { specSource: string; vexSource: string }): {
@@ -16,16 +16,16 @@ export function validateVexSpecPair(input: { specSource: string; vexSource: stri
 
   const messages: string[] = [];
 
-  for (const fn of vexResult.document.functions) {
-    const expected = expectedStepsFromVexFunction(fn);
-    const extracted = extractSpecStepsFromSource(input.specSource, fn.name);
+  for (const root of vexResult.document.describes) {
+    const expected = expectedStepsFromDescribeBlock(root);
+    const extracted = extractSpecStepsFromSource(input.specSource, root.label);
     if (extracted.errorMessage.length > 0) {
-      messages.push(`${fn.name}: ${extracted.errorMessage}`);
+      messages.push(`${root.label}: ${extracted.errorMessage}`);
       continue;
     }
     const cmp = compareSpecStepLists(expected, extracted.steps);
     if (!cmp.ok) {
-      messages.push(`${fn.name}: ${cmp.message}`);
+      messages.push(`${root.label}: ${cmp.message}`);
     }
   }
 

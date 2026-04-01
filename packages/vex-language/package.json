@@ -25,7 +25,11 @@
         "extensions": [
           ".vex"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "dark": "./icons/vex-app-logo.png",
+          "light": "./icons/vex-app-logo.png"
+        }
       }
     ],
     "grammars": [
@@ -33,6 +37,15 @@
         "language": "vex",
         "path": "./syntaxes/vex.tmLanguage.json",
         "scopeName": "source.vex"
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "vex-spec-file-icons",
+        "path": "./vex-file-icon-theme.json",
+        "extends": {
+          "all": true
+        }
       }
     ]
   },

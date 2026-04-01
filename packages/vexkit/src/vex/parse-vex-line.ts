@@ -11,43 +11,57 @@ export function countLeadingSpaces(rawLine: string): number {
   return n;
 }
 
-const FUNCTION_NAME_PATTERN = /^[a-zA-Z0-9_/.-]+$/;
-
-export function parseFunctionHeaderFromLine(content: string): { description: string; name: string | null } {
-  if (content.startsWith("-")) {
-    return { description: "", name: null };
+export function parseDescribeHeaderFromLine(content: string): { label: string | null } {
+  const trimmed = content.trimStart();
+  const lower = trimmed.toLowerCase();
+  if (!lower.startsWith("describe")) {
+    return { label: null };
   }
 
-  const colonIdx = content.indexOf(":");
-  if (colonIdx < 0) {
-    return { description: "", name: null };
+  const afterKeyword = trimmed.slice(8).trimStart();
+  if (!afterKeyword.startsWith(":")) {
+    return { label: null };
   }
 
-  const name = content.slice(0, colonIdx).trim();
-  if (name.length === 0 || !FUNCTION_NAME_PATTERN.test(name)) {
-    return { description: "", name: null };
-  }
-
-  const description = content.slice(colonIdx + 1).trim();
-  return { description, name };
+  const label = afterKeyword.slice(1).trim();
+  return { label: label.length > 0 ? label : null };
 }
 
 export type ListKeyword = "AND" | "IT" | "WHEN";
+
+function labelAfterKeywordPrefix(trimmed: string, keywordLen: number): readonly [boolean, string] {
+  const after = trimmed.slice(keywordLen).trimStart();
+  if (!after.startsWith(":")) {
+    return [false, ""];
+  }
+
+  return [true, after.slice(1).trim()];
+}
 
 export function parseListLineParts(content: string): {
   keyword: ListKeyword | null;
   label: string;
 } {
   const trimmed = content.trimStart();
-  const pairs: readonly { keyword: ListKeyword; prefix: string }[] = [
-    { keyword: "WHEN", prefix: "WHEN:" },
-    { keyword: "AND", prefix: "AND:" },
-    { keyword: "IT", prefix: "IT:" },
-  ];
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith("when")) {
+    const [ok, label] = labelAfterKeywordPrefix(trimmed, 4);
+    if (ok) {
+      return { keyword: "WHEN", label };
+    }
+  }
 
-  for (const { keyword, prefix } of pairs) {
-    if (trimmed.startsWith(prefix)) {
-      return { keyword, label: trimmed.slice(prefix.length).trim() };
+  if (lower.startsWith("and")) {
+    const [ok, label] = labelAfterKeywordPrefix(trimmed, 3);
+    if (ok) {
+      return { keyword: "AND", label };
+    }
+  }
+
+  if (lower.startsWith("it")) {
+    const [ok, label] = labelAfterKeywordPrefix(trimmed, 2);
+    if (ok) {
+      return { keyword: "IT", label };
     }
   }
 

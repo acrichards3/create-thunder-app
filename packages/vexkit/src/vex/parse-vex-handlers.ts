@@ -1,7 +1,7 @@
-import type { VexAnd, VexDocument, VexFunction, VexIt, VexParseError, VexWhen } from "./ast";
-import { countLeadingSpaces, parseFunctionHeaderFromLine, parseListLineParts } from "./parse-vex-line";
+import type { VexAnd, VexDescribeBlock, VexDocument, VexIt, VexParseError, VexWhen } from "./ast";
+import { countLeadingSpaces, parseDescribeHeaderFromLine, parseListLineParts } from "./parse-vex-line";
 import type { StackEntry } from "./parse-vex-stack";
-import { peekStack, popStackForListLine } from "./parse-vex-stack";
+import { peekStack, popDeeperThan, popSiblingDescribesAtIndent, popStackForListLine } from "./parse-vex-stack";
 
 export type ParseContext = {
   document: VexDocument;
@@ -9,39 +9,48 @@ export type ParseContext = {
   stack: StackEntry[];
 };
 
-const RESERVED_FUNCTION_NAMES = new Set(["AND", "IT", "WHEN"]);
-
 function pushError(errors: VexParseError[], line: number, message: string): void {
   errors.push({ line, message });
 }
 
-function processFunctionDeclarationLine(input: {
+function processDescribeDeclarationLine(input: {
   content: string;
   ctx: ParseContext;
   leadingSpaces: number;
   lineNo: number;
 }): void {
   const { content, ctx, leadingSpaces, lineNo } = input;
-  if (leadingSpaces !== 0) {
-    pushError(ctx.errors, lineNo, "Function names must start at column 0.");
+  const { label } = parseDescribeHeaderFromLine(content);
+  if (label == null) {
+    pushError(ctx.errors, lineNo, 'Expected a line like "describe: Label" (describe may be upper or lower case).');
     return;
   }
 
-  const { description, name } = parseFunctionHeaderFromLine(content);
-  if (name == null) {
-    pushError(ctx.errors, lineNo, 'Expected a function line like "myFunction:" or "myFunction: optional description".');
+  popDeeperThan(ctx.stack, leadingSpaces);
+  popSiblingDescribesAtIndent(ctx.stack, leadingSpaces);
+
+  const block: VexDescribeBlock = { label, line: lineNo, nestedDescribes: [], whens: [] };
+
+  if (leadingSpaces === 0) {
+    ctx.document.describes.push(block);
+    ctx.stack.length = 0;
+    ctx.stack.push({ indent: 0, kind: "describe", node: block });
     return;
   }
 
-  if (RESERVED_FUNCTION_NAMES.has(name)) {
-    pushError(ctx.errors, lineNo, "WHEN, AND, and IT are reserved; indent those lines under a function.");
+  const { parent } = peekStack(ctx.stack);
+  if (parent == null || parent.kind !== "describe") {
+    pushError(ctx.errors, lineNo, "Nested describe must be indented under a describe block.");
     return;
   }
 
-  ctx.stack.length = 0;
-  const fn: VexFunction = { description, line: lineNo, name, whens: [] };
-  ctx.document.functions.push(fn);
-  ctx.stack.push({ indent: 0, kind: "function", node: fn });
+  if (leadingSpaces !== parent.indent + 4) {
+    pushError(ctx.errors, lineNo, "describe must be indented one level (4 spaces) deeper than its parent describe.");
+    return;
+  }
+
+  parent.node.nestedDescribes.push(block);
+  ctx.stack.push({ indent: leadingSpaces, kind: "describe", node: block });
 }
 
 function processWhenLine(input: {
@@ -52,13 +61,17 @@ function processWhenLine(input: {
   parent: StackEntry | null;
 }): void {
   const { ctx, label, leadingSpaces, lineNo, parent } = input;
-  if (parent == null || parent.kind !== "function") {
-    pushError(ctx.errors, lineNo, "WHEN must appear directly under a function (4 spaces under the function line).");
+  if (parent == null || parent.kind !== "describe") {
+    pushError(
+      ctx.errors,
+      lineNo,
+      "when must appear directly under a describe block (4 spaces under the describe line).",
+    );
     return;
   }
 
   if (leadingSpaces !== parent.indent + 4) {
-    pushError(ctx.errors, lineNo, "WHEN must be indented 4 spaces under the function name.");
+    pushError(ctx.errors, lineNo, "when must be indented 4 spaces under its parent describe.");
     return;
   }
 
@@ -76,17 +89,17 @@ function processAndLine(input: {
 }): void {
   const { ctx, label, leadingSpaces, lineNo, parent } = input;
   if (parent == null) {
-    pushError(ctx.errors, lineNo, "AND must appear under a WHEN or another AND.");
+    pushError(ctx.errors, lineNo, "and must appear under a when or another and.");
     return;
   }
 
-  if (parent.kind === "function" || parent.kind === "it") {
-    pushError(ctx.errors, lineNo, "AND must appear under a WHEN or another AND.");
+  if (parent.kind === "describe" || parent.kind === "it") {
+    pushError(ctx.errors, lineNo, "and must appear under a when or another and.");
     return;
   }
 
   if (leadingSpaces !== parent.indent + 4) {
-    pushError(ctx.errors, lineNo, "AND must be indented one level (4 spaces) deeper than its parent.");
+    pushError(ctx.errors, lineNo, "and must be indented one level (4 spaces) deeper than its parent.");
     return;
   }
 
@@ -98,7 +111,7 @@ function processAndLine(input: {
   }
 
   if (parent.node.child != null) {
-    pushError(ctx.errors, lineNo, "This AND already has a child; use a nested AND for deeper branches.");
+    pushError(ctx.errors, lineNo, "This and already has a child; use a nested and for deeper branches.");
     return;
   }
 
@@ -118,17 +131,17 @@ function processItLine(input: {
   const it: VexIt = { kind: "it", label, line: lineNo };
 
   if (parent == null) {
-    pushError(ctx.errors, lineNo, "IT must appear under a WHEN or AND.");
+    pushError(ctx.errors, lineNo, "it must appear under a when or and.");
     return;
   }
 
   if (leadingSpaces !== parent.indent + 4) {
-    pushError(ctx.errors, lineNo, "IT must be indented one level (4 spaces) deeper than its parent.");
+    pushError(ctx.errors, lineNo, "it must be indented one level (4 spaces) deeper than its parent.");
     return;
   }
 
-  if (parent.kind === "function") {
-    pushError(ctx.errors, lineNo, "IT must appear under a WHEN or AND, not directly under a function.");
+  if (parent.kind === "describe") {
+    pushError(ctx.errors, lineNo, "it must appear under a when or and, not directly under a describe.");
     return;
   }
 
@@ -140,7 +153,7 @@ function processItLine(input: {
 
   if (parent.kind === "and") {
     if (parent.node.child != null) {
-      pushError(ctx.errors, lineNo, "This AND already has a child.");
+      pushError(ctx.errors, lineNo, "This and already has a child.");
       return;
     }
 
@@ -149,14 +162,14 @@ function processItLine(input: {
     return;
   }
 
-  pushError(ctx.errors, lineNo, "IT cannot appear nested under another IT.");
+  pushError(ctx.errors, lineNo, "it cannot appear nested under another it.");
 }
 
 function processListLine(input: { content: string; ctx: ParseContext; leadingSpaces: number; lineNo: number }): void {
   const { content, ctx, leadingSpaces, lineNo } = input;
   const { keyword, label } = parseListLineParts(content);
   if (keyword == null) {
-    pushError(ctx.errors, lineNo, 'Expected a line starting with "WHEN:", "AND:", or "IT:".');
+    pushError(ctx.errors, lineNo, 'Expected a line starting with "when:", "and:", or "it:" (case-insensitive).');
     return;
   }
 
@@ -219,13 +232,13 @@ export function processVexLine(input: { ctx: ParseContext; line: { lineNo: numbe
       pushError(
         ctx.errors,
         lineNo,
-        "WHEN, AND, and IT lines must be indented under a function (multiples of 4 spaces).",
+        "when, and, it lines must be indented under a describe block (multiples of 4 spaces).",
       );
       return;
     }
 
     if (leadingSpaces < 4) {
-      pushError(ctx.errors, lineNo, "The first WHEN under a function must be indented with at least 4 spaces.");
+      pushError(ctx.errors, lineNo, "The first when under a describe must be indented with at least 4 spaces.");
       return;
     }
 
@@ -233,10 +246,20 @@ export function processVexLine(input: { ctx: ParseContext; line: { lineNo: numbe
     return;
   }
 
-  if (leadingSpaces !== 0) {
-    pushError(ctx.errors, lineNo, 'Expected a line starting with "WHEN:", "AND:", or "IT:" at the correct indent.');
+  const { label: describeLabel } = parseDescribeHeaderFromLine(content);
+  if (describeLabel != null) {
+    processDescribeDeclarationLine({ content, ctx, leadingSpaces, lineNo });
     return;
   }
 
-  processFunctionDeclarationLine({ content, ctx, leadingSpaces, lineNo });
+  if (leadingSpaces === 0) {
+    pushError(ctx.errors, lineNo, 'Expected a top-level line starting with "describe:".');
+    return;
+  }
+
+  pushError(
+    ctx.errors,
+    lineNo,
+    'Expected a line starting with "describe:", "when:", "and:", or "it:" (case-insensitive) at the correct indent.',
+  );
 }

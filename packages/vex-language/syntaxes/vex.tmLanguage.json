@@ -7,15 +7,16 @@
       "match": "#[^\\n]*",
       "name": "comment.line.number-sign.vex"
     },
-    "function-header": {
-      "match": "^([a-zA-Z0-9_/.\\-]+)\\s*:\\s*(.*)$",
+    "describe-header": {
+      "match": "^(\\s*)([dD][eE][sS][cC][rR][iI][bB][eE])\\s*:\\s*(.*)$",
       "captures": {
-        "1": { "name": "entity.name.function.vex" },
-        "2": { "name": "string.unquoted.description.vex" }
+        "1": { "name": "meta.indent.vex" },
+        "2": { "name": "keyword.control.vex" },
+        "3": { "name": "string.unquoted.description.vex" }
       }
     },
     "list-item": {
-      "match": "^(\\s*)(WHEN|AND|IT)(:)(.*)$",
+      "match": "^(\\s*)([wW][hH][eE][nN]|[aA][nN][dD]|[iI][tT])(:)(.*)$",
       "captures": {
         "1": { "name": "meta.indent.vex" },
         "2": { "name": "keyword.control.vex" },
@@ -24,7 +25,7 @@
       }
     },
     "vex-root": {
-      "patterns": [{ "include": "#comment" }, { "include": "#function-header" }, { "include": "#list-item" }]
+      "patterns": [{ "include": "#comment" }, { "include": "#describe-header" }, { "include": "#list-item" }]
     }
   },
   "scopeName": "source.vex"

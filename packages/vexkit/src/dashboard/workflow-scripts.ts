@@ -55,7 +55,7 @@ CRITICAL CONSTRAINTS — YOU MUST FOLLOW THESE:
 1. Based on the conversation so far, create or modify .vex files to fully spec out the feature.
 2. You may ONLY write files ending in .vex — all other file writes will be rejected.
 3. Do NOT write implementation code, test files, or any non-.vex files.
-4. A .vex file defines behavior as a logic tree. Each file contains one or more functions with WHEN/AND/IT branches that describe behavior.
+4. A .vex file defines behavior as a logic tree. Use nested describe: blocks and when/and/it branches (keywords are case-insensitive, like SQL).
 5. When you have finished writing ALL necessary .vex specs, you MUST end your reply with the following signal as the very last line of your response:
 ---SPECS_DONE---
 6. The signal ---SPECS_DONE--- is literal text you must include verbatim as the last line. It is NOT a placeholder. Copy it exactly. Without it the workflow cannot advance.

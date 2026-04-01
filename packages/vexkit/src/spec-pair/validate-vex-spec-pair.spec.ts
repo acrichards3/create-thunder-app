@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { validateVexSpecPair } from "./validate-vex-spec-pair";
 
-const minimalVex = `bar:
-    WHEN: hello
-        IT: works
+const minimalVex = `describe: bar
+    when: hello
+        it: works
 `;
 
 const minimalSpec = `import { describe, it } from "bun:test";
