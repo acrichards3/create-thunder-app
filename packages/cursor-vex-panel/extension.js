@@ -1022,7 +1022,10 @@ function isVexApplyLabelEdit(value) {
   if (value.type !== "vexApplyLabelEdit") {
     return false;
   }
-  if (typeof value.start !== "number" || typeof value.end !== "number") {
+  if (typeof value.start !== "number") {
+    return false;
+  }
+  if (typeof value.end !== "number") {
     return false;
   }
   if (typeof value.text !== "string") {
@@ -1033,14 +1036,20 @@ function isVexApplyLabelEdit(value) {
 async function applyVexLabelReplace(uri, start, end, text) {
   const doc = await vscode.workspace.openTextDocument(uri);
   const len = doc.getText().length;
-  const rangeOk = start >= 0 && end <= len && start <= end;
-  if (!rangeOk) {
+  if (start < 0) {
+    await vscode.window.showErrorMessage("Invalid label range.");
+    return;
+  }
+  if (end > len) {
+    await vscode.window.showErrorMessage("Invalid label range.");
+    return;
+  }
+  if (start > end) {
     await vscode.window.showErrorMessage("Invalid label range.");
     return;
   }
   const range = new vscode.Range(doc.positionAt(start), doc.positionAt(end));
-  const current = doc.getText(range);
-  if (current === text) {
+  if (doc.getText(range) === text) {
     return;
   }
   const edit = new vscode.WorkspaceEdit;

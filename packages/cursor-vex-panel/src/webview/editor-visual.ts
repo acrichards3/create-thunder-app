@@ -1,13 +1,14 @@
 import type { ParseError, VexDocument } from "../vex-parse/types";
-import { clearInlineEditorFromContent, isInlineEditorTarget, setupInlineLabelEditing } from "./inline-label-editor";
+import { clearInlineEditorFromContent, setupInlineLabelEditing } from "./inline-label-editor";
 import { renderDescribeBlock } from "./tree-paint";
+import { applySvgZoom, createViewportState, fitTreeToViewport, initViewportControls } from "./viewport-controls";
 
 declare function acquireVsCodeApi(): {
   postMessage(message: unknown): void;
 };
 
 type VexVisualPayload =
-  | { fileName?: string; kind: "document"; document: VexDocument }
+  | { document: VexDocument; fileName?: string; kind: "document" }
   | { errors: ParseError[]; fileName?: string; kind: "parseError" }
   | { kind: "idle"; message: string };
 
@@ -19,47 +20,17 @@ function isVexVisualPayload(value: unknown): value is VexVisualPayload {
   if (!isRecord(value)) {
     return false;
   }
-  const kind = value.kind;
-  if (kind === "idle") {
+  if (value.kind === "idle") {
     return typeof value.message === "string";
   }
-  if (kind === "parseError") {
+  if (value.kind === "parseError") {
     return Array.isArray(value.errors);
   }
-  if (kind === "document") {
+  if (value.kind === "document") {
     return isRecord(value.document) && Array.isArray(value.document.describes);
   }
   return false;
 }
-
-const vscode = acquireVsCodeApi();
-
-let selectedTabIndex = 0;
-let lastDescribeCount = 0;
-let lastDocument: null | VexDocument = null;
-
-const ZOOM_MIN = 0.1;
-const ZOOM_MAX = 3;
-const ZOOM_STEP = 1.18;
-const FIT_VIEW_MARGIN = 0.92;
-const WHEEL_FRAME_FACTOR_MAX = 1.38;
-const WHEEL_FRAME_FACTOR_MIN = 0.72;
-const WHEEL_ZOOM_EXP_K = 0.0048;
-
-let zoom = 1;
-let wheelAnchorVx = 0;
-let wheelAnchorVy = 0;
-let wheelDeltaAccum = 0;
-let wheelZoomFlushScheduled = false;
-let panDragging = false;
-let dragPointerId: null | number = null;
-let dragLastX = 0;
-let dragLastY = 0;
-
-let hasDoneInitialViewportReset = false;
-
-const viewportEl = document.getElementById("vex-ed-viewport");
-const contentEl = document.getElementById("vex-ed-content");
 
 function escapeHtml(text: string): string {
   return String(text)
@@ -69,328 +40,53 @@ function escapeHtml(text: string): string {
     .replaceAll('"', "&quot;");
 }
 
-function applySvgZoom(): void {
-  if (!contentEl) {
-    return;
-  }
-  const svg = contentEl.querySelector("#tree-wrap svg");
-  if (!svg) {
-    return;
-  }
-  const bw = svg.getAttribute("data-svg-base-w");
-  const bh = svg.getAttribute("data-svg-base-h");
-  if (bw == null || bh == null) {
-    return;
-  }
-  const w = Number(bw) * zoom;
-  const h = Number(bh) * zoom;
-  svg.setAttribute("width", String(w));
-  svg.setAttribute("height", String(h));
-}
+const vscode = acquireVsCodeApi();
+const viewportEl = document.getElementById("vex-ed-viewport");
+const contentEl = document.getElementById("vex-ed-content");
 
-function updateZoomLabel(): void {
-  const el = document.getElementById("vex-ed-zoom-pct");
-  if (!el) {
-    return;
-  }
-  el.textContent = `${String(Math.round(zoom * 100))}%`;
-}
+let selectedTabIndex = 0;
+let lastDescribeCount = 0;
+let lastDocument: VexDocument | null = null;
+let hasDoneInitialViewportReset = false;
 
-function clampZoom(value: number): number {
-  if (value < ZOOM_MIN) {
-    return ZOOM_MIN;
-  }
-  if (value > ZOOM_MAX) {
-    return ZOOM_MAX;
-  }
-  return value;
-}
-
-function centerViewportScroll(): void {
-  if (!viewportEl) {
-    return;
-  }
-  const maxLeft = Math.max(0, viewportEl.scrollWidth - viewportEl.clientWidth);
-  const maxTop = Math.max(0, viewportEl.scrollHeight - viewportEl.clientHeight);
-  viewportEl.scrollLeft = maxLeft / 2;
-  viewportEl.scrollTop = maxTop / 2;
-}
-
-function scheduleViewportCenter(): void {
-  if (!viewportEl) {
-    return;
-  }
-  requestAnimationFrame(function () {
-    requestAnimationFrame(function () {
-      centerViewportScroll();
-    });
-  });
-}
-
-function fitTreeToViewport(): void {
-  if (!viewportEl || !contentEl) {
-    return;
-  }
-  const svg = contentEl.querySelector("#tree-wrap svg");
-  if (!svg) {
-    scheduleViewportCenter();
-    return;
-  }
-  const bw = svg.getAttribute("data-svg-base-w");
-  const bh = svg.getAttribute("data-svg-base-h");
-  if (bw == null || bh == null) {
-    return;
-  }
-  const baseW = Number(bw);
-  const baseH = Number(bh);
-  const vw = viewportEl.clientWidth;
-  const vh = viewportEl.clientHeight;
-  if (vw < 1 || vh < 1) {
-    requestAnimationFrame(function () {
-      fitTreeToViewport();
-    });
-    return;
-  }
-  const fit = Math.min((vw * FIT_VIEW_MARGIN) / baseW, (vh * FIT_VIEW_MARGIN) / baseH);
-  const zoomNext = clampZoom(Math.min(1, fit));
-  zoom = zoomNext;
-  applySvgZoom();
-  updateZoomLabel();
-  scheduleViewportCenter();
-}
+const vpState = viewportEl && contentEl ? createViewportState(viewportEl, contentEl) : null;
 
 function resetView(): void {
-  fitTreeToViewport();
-}
-
-type SvgZoomScrollInput = {
-  anchor: { vx: number; vy: number };
-  ox: number;
-  oy: number;
-  r: number;
-  slBefore: number;
-  stBefore: number;
-  svgLeftInViewport: number;
-  svgTopInViewport: number;
-};
-
-function scheduleScrollAfterZoomTowardSvgPoint(input: SvgZoomScrollInput): void {
-  const { anchor, ox, oy, r, slBefore, stBefore, svgLeftInViewport, svgTopInViewport } = input;
-  requestAnimationFrame(function () {
-    if (!viewportEl) {
-      return;
-    }
-    const v = viewportEl;
-    const nl = slBefore + svgLeftInViewport + ox * r - anchor.vx;
-    const nt = stBefore + svgTopInViewport + oy * r - anchor.vy;
-    const maxLeft = Math.max(0, v.scrollWidth - v.clientWidth);
-    const maxTop = Math.max(0, v.scrollHeight - v.clientHeight);
-    v.scrollLeft = Math.min(maxLeft, Math.max(0, nl));
-    v.scrollTop = Math.min(maxTop, Math.max(0, nt));
-  });
-}
-
-function flushWheelZoom(): void {
-  wheelZoomFlushScheduled = false;
-  if (wheelDeltaAccum === 0) {
-    return;
-  }
-  const deltaSum = wheelDeltaAccum;
-  wheelDeltaAccum = 0;
-  const raw = Math.exp(-deltaSum * WHEEL_ZOOM_EXP_K);
-  const factor = Math.min(WHEEL_FRAME_FACTOR_MAX, Math.max(WHEEL_FRAME_FACTOR_MIN, raw));
-  zoomByFactor(factor, { vx: wheelAnchorVx, vy: wheelAnchorVy });
-}
-
-function scheduleWheelZoomFlush(): void {
-  if (wheelZoomFlushScheduled) {
-    return;
-  }
-  wheelZoomFlushScheduled = true;
-  requestAnimationFrame(flushWheelZoom);
-}
-
-function zoomByFactor(factor: number, anchorViewport: { vx: number; vy: number } | undefined): void {
-  if (!viewportEl) {
-    return;
-  }
-  const vp = viewportEl;
-  const oldZoom = zoom;
-  const next = clampZoom(zoom * factor);
-  if (next === oldZoom) {
-    return;
-  }
-  const r = next / oldZoom;
-  const slBefore = vp.scrollLeft;
-  const stBefore = vp.scrollTop;
-  const vpRect = vp.getBoundingClientRect();
-  const svg = contentEl?.querySelector("#tree-wrap svg");
-  let scrollInput: SvgZoomScrollInput | undefined;
-  if (anchorViewport && svg) {
-    const svgRect = svg.getBoundingClientRect();
-    const svgLeftInViewport = svgRect.left - vpRect.left;
-    const svgTopInViewport = svgRect.top - vpRect.top;
-    scrollInput = {
-      anchor: anchorViewport,
-      ox: anchorViewport.vx - svgLeftInViewport,
-      oy: anchorViewport.vy - svgTopInViewport,
-      r,
-      slBefore,
-      stBefore,
-      svgLeftInViewport,
-      svgTopInViewport,
-    };
-  }
-  zoom = next;
-  applySvgZoom();
-  updateZoomLabel();
-  if (scrollInput) {
-    scheduleScrollAfterZoomTowardSvgPoint(scrollInput);
+  if (vpState) {
+    fitTreeToViewport(vpState);
   }
 }
 
-function setupPan(): void {
-  if (!viewportEl) {
-    return;
-  }
-  const vp = viewportEl;
-
-  vp.addEventListener(
-    "wheel",
-    function onWheel(e: WheelEvent) {
-      if (!e.ctrlKey && !e.metaKey) {
-        return;
-      }
-      e.preventDefault();
-      const rect = vp.getBoundingClientRect();
-      wheelAnchorVx = e.clientX - rect.left;
-      wheelAnchorVy = e.clientY - rect.top;
-      wheelDeltaAccum += e.deltaY;
-      scheduleWheelZoomFlush();
-    },
-    { passive: false },
-  );
-
-  function onPointerMove(e: PointerEvent): void {
-    if (!panDragging || dragPointerId !== e.pointerId) {
-      return;
-    }
-    const dx = e.clientX - dragLastX;
-    const dy = e.clientY - dragLastY;
-    dragLastX = e.clientX;
-    dragLastY = e.clientY;
-    vp.scrollLeft -= dx;
-    vp.scrollTop -= dy;
-  }
-
-  function endPan(e: PointerEvent): void {
-    if (!panDragging || dragPointerId !== e.pointerId) {
-      return;
-    }
-    panDragging = false;
-    dragPointerId = null;
-    vp.classList.remove("vex-ed-viewport--dragging");
-    document.removeEventListener("pointermove", onPointerMove);
-    document.removeEventListener("pointerup", endPan);
-    document.removeEventListener("pointercancel", endPan);
-  }
-
-  vp.addEventListener("pointerdown", function onPointerDown(e: PointerEvent) {
-    if (e.button !== 0) {
-      return;
-    }
-    const t = e.target;
-    if (isInlineEditorTarget(t)) {
-      return;
-    }
-    if (!(t instanceof Node) || !vp.contains(t)) {
-      return;
-    }
-    if (t instanceof SVGElement) {
-      const card = t.closest("rect.vex-node-card");
-      if (card != null) {
-        return;
-      }
-    }
-    e.preventDefault();
-    panDragging = true;
-    dragPointerId = e.pointerId;
-    dragLastX = e.clientX;
-    dragLastY = e.clientY;
-    vp.classList.add("vex-ed-viewport--dragging");
-    document.addEventListener("pointermove", onPointerMove);
-    document.addEventListener("pointerup", endPan);
-    document.addEventListener("pointercancel", endPan);
-  });
-}
-
-function setupZoomControls(): void {
-  const zoomIn = document.getElementById("vex-ed-zoom-in");
-  const zoomOut = document.getElementById("vex-ed-zoom-out");
-  const zoomReset = document.getElementById("vex-ed-zoom-reset");
-  if (zoomIn) {
-    zoomIn.addEventListener("click", function onZoomIn() {
-      if (!viewportEl) {
-        return;
-      }
-      zoomByFactor(ZOOM_STEP, {
-        vx: viewportEl.clientWidth / 2,
-        vy: viewportEl.clientHeight / 2,
-      });
-    });
-  }
-  if (zoomOut) {
-    zoomOut.addEventListener("click", function onZoomOut() {
-      if (!viewportEl) {
-        return;
-      }
-      zoomByFactor(1 / ZOOM_STEP, {
-        vx: viewportEl.clientWidth / 2,
-        vy: viewportEl.clientHeight / 2,
-      });
-    });
-  }
-  if (zoomReset) {
-    zoomReset.addEventListener("click", function onZoomReset() {
-      resetView();
-    });
-  }
-  updateZoomLabel();
-}
-
-function renderDocument(vexDoc: VexDocument, viewportOptions: { resetViewport?: boolean } | undefined): void {
+function renderDocument(vexDoc: VexDocument, resetViewport: boolean): void {
   if (!contentEl) {
     return;
   }
   clearInlineEditorFromContent(contentEl);
-  const resetViewport = viewportOptions?.resetViewport === true;
-  const describes = vexDoc.describes;
-  if (describes.length === 0) {
+
+  if (vexDoc.describes.length === 0) {
     contentEl.innerHTML = "";
     const p = document.createElement("p");
     p.className = "vex-ed-placeholder";
     p.textContent = "No top-level describe blocks.";
     contentEl.appendChild(p);
     if (resetViewport) {
-      requestAnimationFrame(function () {
-        resetView();
-      });
+      requestAnimationFrame(resetView);
     }
     return;
   }
 
-  if (describes.length !== lastDescribeCount) {
+  if (vexDoc.describes.length !== lastDescribeCount) {
     selectedTabIndex = 0;
   }
-  lastDescribeCount = describes.length;
-  if (selectedTabIndex >= describes.length) {
+  lastDescribeCount = vexDoc.describes.length;
+  if (selectedTabIndex >= vexDoc.describes.length) {
     selectedTabIndex = 0;
   }
 
   const tabsEl = document.getElementById("vex-ed-tabs");
   if (tabsEl) {
     tabsEl.innerHTML = "";
-    describes.forEach((d, index) => {
+    vexDoc.describes.forEach((d, index) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = `vex-ed-tab${index === selectedTabIndex ? " vex-ed-tab--active" : ""}`;
@@ -398,7 +94,7 @@ function renderDocument(vexDoc: VexDocument, viewportOptions: { resetViewport?: 
       btn.addEventListener("click", function onTabClick() {
         selectedTabIndex = index;
         if (lastDocument !== null) {
-          renderDocument(lastDocument, { resetViewport: true });
+          renderDocument(lastDocument, true);
         }
       });
       tabsEl.appendChild(btn);
@@ -406,16 +102,14 @@ function renderDocument(vexDoc: VexDocument, viewportOptions: { resetViewport?: 
   }
 
   contentEl.innerHTML = "";
-  const block = describes[selectedTabIndex];
-  const tree = renderDescribeBlock(block);
+  const tree = renderDescribeBlock(vexDoc.describes[selectedTabIndex]);
   contentEl.appendChild(tree);
+
   if (resetViewport) {
+    requestAnimationFrame(resetView);
+  } else if (vpState) {
     requestAnimationFrame(function () {
-      resetView();
-    });
-  } else {
-    requestAnimationFrame(function () {
-      applySvgZoom();
+      applySvgZoom(vpState);
     });
   }
 }
@@ -462,9 +156,8 @@ function renderPayload(payload: VexVisualPayload): void {
     }
     errEl.hidden = false;
     titleEl.textContent = "Vex";
-    const parts = payload.errors.map((e) => `Line ${String(e.line)}: ${escapeHtml(e.message)}`);
-    const listItems = parts.map((p) => "<li>" + p + "</li>").join("");
-    errEl.innerHTML = "<p><strong>Parse error</strong></p><ul>" + listItems + "</ul>";
+    const items = payload.errors.map((e) => `<li>Line ${String(e.line)}: ${escapeHtml(e.message)}</li>`);
+    errEl.innerHTML = `<p><strong>Parse error</strong></p><ul>${items.join("")}</ul>`;
     return;
   }
 
@@ -474,7 +167,7 @@ function renderPayload(payload: VexVisualPayload): void {
   titleEl.textContent = `${base ?? "Vex"} — visual`;
   const resetViewport = !hasDoneInitialViewportReset;
   hasDoneInitialViewportReset = true;
-  renderDocument(payload.document, { resetViewport });
+  renderDocument(payload.document, resetViewport);
 }
 
 window.addEventListener("message", function (event: MessageEvent) {
@@ -494,7 +187,8 @@ window.addEventListener("message", function (event: MessageEvent) {
   renderPayload(data.payload);
 });
 
-setupPan();
-setupZoomControls();
-setupInlineLabelEditing({ contentEl, vscode });
+if (vpState) {
+  initViewportControls(vpState);
+}
+setupInlineLabelEditing(contentEl, vscode);
 vscode.postMessage({ type: "vexVisualReady" });

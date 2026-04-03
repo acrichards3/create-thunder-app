@@ -1,12 +1,12 @@
-import { SVG_NS } from "./tree-types";
+import { NODE_FILL, SVG_NS, TEXT_MAIN, XHTML_NS } from "./tree-types";
 
 const FO_CLASS = "vex-inline-edit-fo";
-const TEXT_MAIN = "#f1f5f9";
-const NODE_FILL = "#0f172a";
+
+type VsCodeApi = { postMessage(message: unknown): void };
 
 let activeFinishCommit: (() => void) | null = null;
 
-function clearInlineEditor(svg: SVGSVGElement): void {
+function removeAllEditors(svg: SVGSVGElement): void {
   svg.querySelectorAll(`.${FO_CLASS}`).forEach((el) => {
     el.remove();
   });
@@ -17,13 +17,19 @@ export function clearInlineEditorFromContent(contentEl: HTMLElement | null): voi
   activeFinishCommit = null;
   const svg = contentEl?.querySelector("#tree-wrap svg");
   if (svg instanceof SVGSVGElement) {
-    clearInlineEditor(svg);
+    removeAllEditors(svg);
   }
 }
 
-type VsCodeApi = { postMessage(message: unknown): void };
+function hasFiniteAttr(el: SVGRectElement, name: string): boolean {
+  const raw = el.getAttribute(name);
+  if (raw == null) {
+    return false;
+  }
+  return Number.isFinite(Number(raw));
+}
 
-function commitEdit(textarea: HTMLTextAreaElement, fo: SVGForeignObjectElement, vscode: VsCodeApi): void {
+function commitEdit(textarea: HTMLTextAreaElement, fo: SVGForeignObjectElement, api: VsCodeApi): void {
   const start = Number(textarea.dataset.start);
   const end = Number(textarea.dataset.end);
   const original = textarea.dataset.original ?? "";
@@ -41,87 +47,10 @@ function commitEdit(textarea: HTMLTextAreaElement, fo: SVGForeignObjectElement, 
   if (next === original) {
     return;
   }
-  vscode.postMessage({ end, start, text: next, type: "vexApplyLabelEdit" });
+  api.postMessage({ end, start, text: next, type: "vexApplyLabelEdit" });
 }
 
-function blurInlineEditorIfOutsideTarget(target: EventTarget | null): void {
-  const active = document.activeElement;
-  if (!(active instanceof HTMLTextAreaElement)) {
-    return;
-  }
-  const fo = active.closest(`.${FO_CLASS}`);
-  if (!fo) {
-    return;
-  }
-  if (!(target instanceof Node)) {
-    return;
-  }
-  if (fo.contains(target)) {
-    return;
-  }
-  active.blur();
-}
-
-function openInlineEditor(card: SVGRectElement, vscode: VsCodeApi): void {
-  const svg = card.ownerSVGElement;
-  if (!svg) {
-    return;
-  }
-  const enc = card.getAttribute("data-label-enc");
-  const startAttr = card.getAttribute("data-label-start");
-  const endAttr = card.getAttribute("data-label-end");
-  if (startAttr == null) {
-    return;
-  }
-  if (endAttr == null) {
-    return;
-  }
-  const start = Number(startAttr);
-  const end = Number(endAttr);
-  if (!Number.isFinite(start)) {
-    return;
-  }
-  if (!Number.isFinite(end)) {
-    return;
-  }
-  if (start > end) {
-    return;
-  }
-  const label = enc != null && enc !== "" ? decodeURIComponent(enc) : "";
-  const x = Number(card.getAttribute("x"));
-  const y = Number(card.getAttribute("y"));
-  const w = Number(card.getAttribute("width"));
-  const h = Number(card.getAttribute("height"));
-  if (!Number.isFinite(x)) {
-    return;
-  }
-  if (!Number.isFinite(y)) {
-    return;
-  }
-  if (!Number.isFinite(w)) {
-    return;
-  }
-  if (!Number.isFinite(h)) {
-    return;
-  }
-
-  activeFinishCommit?.();
-  activeFinishCommit = null;
-  clearInlineEditor(svg);
-
-  const fo = document.createElementNS(SVG_NS, "foreignObject");
-  fo.setAttribute("class", FO_CLASS);
-  fo.setAttribute("x", String(x));
-  fo.setAttribute("y", String(y));
-  fo.setAttribute("width", String(w));
-  fo.setAttribute("height", String(h));
-  const wrapper = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
-  wrapper.setAttribute("class", "vex-inline-edit-inner");
-  wrapper.style.boxSizing = "border-box";
-  wrapper.style.width = "100%";
-  wrapper.style.height = "100%";
-  wrapper.style.margin = "0";
-  wrapper.style.padding = "0";
+function createTextarea(label: string, start: number, end: number): HTMLTextAreaElement {
   const ta = document.createElement("textarea");
   ta.value = label;
   ta.dataset.start = String(start);
@@ -130,7 +59,6 @@ function openInlineEditor(card: SVGRectElement, vscode: VsCodeApi): void {
   ta.style.boxSizing = "border-box";
   ta.style.width = "100%";
   ta.style.height = "100%";
-  ta.style.margin = "0";
   ta.style.padding = "0";
   ta.style.border = "none";
   ta.style.resize = "none";
@@ -141,11 +69,57 @@ function openInlineEditor(card: SVGRectElement, vscode: VsCodeApi): void {
   ta.style.fontWeight = "600";
   ta.style.lineHeight = "1.35";
   ta.style.outline = "none";
-  fo.appendChild(wrapper);
+  return ta;
+}
+
+function openInlineEditor(card: SVGRectElement, api: VsCodeApi): void {
+  const svg = card.ownerSVGElement;
+  if (!svg) {
+    return;
+  }
+  const requiredAttrs = ["data-label-start", "data-label-end", "x", "y", "width", "height"] as const;
+  const allPresent = requiredAttrs.every((attr) => hasFiniteAttr(card, attr));
+  if (!allPresent) {
+    return;
+  }
+  const start = Number(card.getAttribute("data-label-start"));
+  const end = Number(card.getAttribute("data-label-end"));
+  const x = Number(card.getAttribute("x"));
+  const y = Number(card.getAttribute("y"));
+  const w = Number(card.getAttribute("width"));
+  const h = Number(card.getAttribute("height"));
+  if (start > end) {
+    return;
+  }
+  const enc = card.getAttribute("data-label-enc");
+  const label = enc != null && enc !== "" ? decodeURIComponent(enc) : "";
+
+  activeFinishCommit?.();
+  activeFinishCommit = null;
+  removeAllEditors(svg);
+
+  const fo = document.createElementNS(SVG_NS, "foreignObject");
+  fo.setAttribute("class", FO_CLASS);
+  fo.setAttribute("x", String(x));
+  fo.setAttribute("y", String(y));
+  fo.setAttribute("width", String(w));
+  fo.setAttribute("height", String(h));
+
+  const wrapper = document.createElementNS(XHTML_NS, "div");
+  wrapper.setAttribute("class", "vex-inline-edit-inner");
+  wrapper.style.boxSizing = "border-box";
+  wrapper.style.width = "100%";
+  wrapper.style.height = "100%";
+  wrapper.style.padding = "0";
+
+  const ta = createTextarea(label, start, end);
   wrapper.appendChild(ta);
+  fo.appendChild(wrapper);
   svg.appendChild(fo);
+
   let cancelled = false;
   let finished = false;
+
   function finishCommit(): void {
     if (cancelled) {
       return;
@@ -157,12 +131,15 @@ function openInlineEditor(card: SVGRectElement, vscode: VsCodeApi): void {
     if (activeFinishCommit === finishCommit) {
       activeFinishCommit = null;
     }
-    commitEdit(ta, fo, vscode);
+    commitEdit(ta, fo, api);
   }
+
   activeFinishCommit = finishCommit;
+
   ta.addEventListener("blur", function onBlur() {
     finishCommit();
   });
+
   ta.addEventListener("keydown", function onKeydown(e: KeyboardEvent): void {
     if (e.key === "Escape") {
       e.preventDefault();
@@ -180,31 +157,46 @@ function openInlineEditor(card: SVGRectElement, vscode: VsCodeApi): void {
       finishCommit();
     }
   });
+
   ta.focus();
   ta.select();
+}
+
+function blurEditorIfOutsideTarget(target: EventTarget | null): void {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLTextAreaElement)) {
+    return;
+  }
+  const fo = active.closest(`.${FO_CLASS}`);
+  if (!fo) {
+    return;
+  }
+  if (!(target instanceof Node)) {
+    return;
+  }
+  if (fo.contains(target)) {
+    return;
+  }
+  active.blur();
 }
 
 export function isInlineEditorTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && target.closest(`.${FO_CLASS}`) != null;
 }
 
-type SetupInlineLabelEditingInput = {
-  contentEl: HTMLElement | null;
-  vscode: VsCodeApi;
-};
-
-export function setupInlineLabelEditing(input: SetupInlineLabelEditingInput): void {
-  const { contentEl, vscode } = input;
+export function setupInlineLabelEditing(contentEl: HTMLElement | null, api: VsCodeApi): void {
   if (!contentEl) {
     return;
   }
+
   document.addEventListener(
     "pointerdown",
     function onPointerDownCapture(e: PointerEvent): void {
-      blurInlineEditorIfOutsideTarget(e.target);
+      blurEditorIfOutsideTarget(e.target);
     },
     true,
   );
+
   contentEl.addEventListener("click", function onNodeCardClick(e: MouseEvent): void {
     const t = e.target;
     if (!(t instanceof SVGElement)) {
@@ -219,6 +211,6 @@ export function setupInlineLabelEditing(input: SetupInlineLabelEditingInput): vo
     }
     e.preventDefault();
     e.stopPropagation();
-    openInlineEditor(card, vscode);
+    openInlineEditor(card, api);
   });
 }

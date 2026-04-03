@@ -1,6 +1,7 @@
 import type { LabelSpan } from "../vex-parse/types";
 
 export const SVG_NS = "http://www.w3.org/2000/svg";
+export const XHTML_NS = "http://www.w3.org/1999/xhtml";
 
 export const NODE_W = 200;
 export const NODE_MAX_W = 320;
@@ -13,6 +14,7 @@ export const SIDE_PAD = 24;
 
 export const NODE_FILL = "#0f172a";
 export const TEXT_MAIN = "#f1f5f9";
+export const LINE_COLOR = "#64748b";
 
 export const KIND_STYLES = {
   and: { color: "#22c55e", label: "AND" },

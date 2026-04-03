@@ -1,7 +1,11 @@
 import type { DescribeBlock } from "../vex-parse/types";
+import { drawArrow, drawBranchConnector } from "./tree-edges";
+import { sizeDescribe } from "./tree-layout";
+import { BODY_FIRST_BASELINE, BODY_LINE_STEP, KIND_BASELINE, getWrappedBodyLines, measureNodeCard } from "./tree-text";
 import {
   H_GAP,
   KIND_STYLES,
+  LINE_COLOR,
   NODE_FILL,
   SIDE_PAD,
   SVG_NS,
@@ -11,149 +15,121 @@ import {
   V_GAP,
   type SizedNode,
 } from "./tree-types";
-import { drawArrow, drawBranchConnector, LINE_COLOR } from "./tree-edges";
-import { sizeDescribe } from "./tree-layout";
-import { BODY_FIRST_BASELINE, BODY_LINE_STEP, KIND_BASELINE, getWrappedBodyLines, measureNodeCard } from "./tree-text";
 
-function elSvg(tag: string, attrs: Record<string, string> | undefined, children: Node[]): SVGElement {
-  const e = document.createElementNS(SVG_NS, tag);
-  if (attrs) {
-    Object.keys(attrs).forEach((k) => {
-      e.setAttribute(k, attrs[k] ?? "");
-    });
-  }
-  children.forEach((ch) => {
-    e.appendChild(ch);
+function createSvgElement(tag: string, attrs: Record<string, string>): SVGElement {
+  const el = document.createElementNS(SVG_NS, tag);
+  Object.keys(attrs).forEach((k) => {
+    el.setAttribute(k, attrs[k] ?? "");
   });
-  return e;
+  return el;
 }
 
-function appendCenteredLine(
+function appendCenteredText(
   parent: SVGElement,
-  cx: number,
-  baselineY: number,
-  content: string,
-  attrs: Record<string, string>,
+  input: { attrs: Record<string, string>; cx: number; text: string; y: number },
 ): void {
-  const lineG = document.createElementNS(SVG_NS, "g");
-  lineG.setAttribute("pointer-events", "none");
-  lineG.setAttribute("transform", `translate(${String(cx)}, ${String(baselineY)})`);
-  lineG.appendChild(
-    elSvg(
-      "text",
-      {
-        ...attrs,
-        "dominant-baseline": "middle",
-        "pointer-events": "none",
-        "text-anchor": "middle",
-        x: "0",
-        y: "0",
-      },
-      [document.createTextNode(content)],
-    ),
-  );
-  parent.appendChild(lineG);
+  const g = document.createElementNS(SVG_NS, "g");
+  g.setAttribute("pointer-events", "none");
+  g.setAttribute("transform", `translate(${String(input.cx)}, ${String(input.y)})`);
+  const textEl = createSvgElement("text", {
+    ...input.attrs,
+    "dominant-baseline": "middle",
+    "pointer-events": "none",
+    "text-anchor": "middle",
+    x: "0",
+    y: "0",
+  });
+  textEl.appendChild(document.createTextNode(input.text));
+  g.appendChild(textEl);
+  parent.appendChild(g);
 }
 
-function drawCard(g: SVGElement, n: SizedNode, x: number, y: number, cardH: number, cardW: number): void {
-  const k = KIND_STYLES[n.kind];
-  const layoutW = n.w;
-  const cardLeft = x + (layoutW - cardW) / 2;
+function drawCard(g: SVGElement, node: SizedNode, x: number, y: number, cardW: number, cardH: number): void {
+  const style = KIND_STYLES[node.kind];
+  const cardLeft = x + (node.w - cardW) / 2;
   const cx = cardLeft + cardW / 2;
-  const bodyLines = getWrappedBodyLines(n.label);
+
   g.appendChild(
-    elSvg(
-      "rect",
-      {
-        class: "vex-node-card",
-        "data-label-enc": encodeURIComponent(n.label),
-        "data-label-end": String(n.labelSpan.end),
-        "data-label-start": String(n.labelSpan.start),
-        fill: NODE_FILL,
-        height: String(cardH),
-        rx: "8",
-        stroke: k.color,
-        "stroke-width": "2",
-        width: String(cardW),
-        x: String(cardLeft),
-        y: String(y),
-      },
-      [],
-    ),
+    createSvgElement("rect", {
+      class: "vex-node-card",
+      "data-label-enc": encodeURIComponent(node.label),
+      "data-label-end": String(node.labelSpan.end),
+      "data-label-start": String(node.labelSpan.start),
+      fill: NODE_FILL,
+      height: String(cardH),
+      rx: "8",
+      stroke: style.color,
+      "stroke-width": "2",
+      width: String(cardW),
+      x: String(cardLeft),
+      y: String(y),
+    }),
   );
-  appendCenteredLine(g, cx, y + KIND_BASELINE, k.label, {
-    fill: k.color,
-    "font-family": "system-ui, sans-serif",
-    "font-size": "9",
-    "font-weight": "700",
-    "letter-spacing": "1",
-  });
-  bodyLines.forEach((line, i) => {
-    appendCenteredLine(g, cx, y + BODY_FIRST_BASELINE + i * BODY_LINE_STEP, line, {
-      fill: TEXT_MAIN,
+
+  appendCenteredText(g, {
+    attrs: {
+      fill: style.color,
       "font-family": "system-ui, sans-serif",
-      "font-size": "11",
-      "font-weight": "600",
+      "font-size": "9",
+      "font-weight": "700",
+      "letter-spacing": "1",
+    },
+    cx,
+    text: style.label,
+    y: y + KIND_BASELINE,
+  });
+
+  getWrappedBodyLines(node.label).forEach((line, i) => {
+    appendCenteredText(g, {
+      attrs: { fill: TEXT_MAIN, "font-family": "system-ui, sans-serif", "font-size": "11", "font-weight": "600" },
+      cx,
+      text: line,
+      y: y + BODY_FIRST_BASELINE + i * BODY_LINE_STEP,
     });
   });
 }
 
-function paint(g: SVGElement, n: SizedNode, x: number, y: number): void {
-  const cardMetrics = measureNodeCard(n.label);
-  const cardH = cardMetrics.h;
-  const cardW = cardMetrics.w;
-  drawCard(g, n, x, y, cardH, cardW);
-  if (n.kids.length === 0) {
+function paintNode(g: SVGElement, node: SizedNode, x: number, y: number): void {
+  const { h: cardH, w: cardW } = measureNodeCard(node.label);
+  drawCard(g, node, x, y, cardW, cardH);
+
+  if (node.kids.length === 0) {
     return;
   }
-  const px = x + n.w / 2;
+
+  const parentCx = x + node.w / 2;
   const cardBottom = y + cardH;
-  if (n.kids.length === 1) {
-    const k0 = n.kids[0];
-    const kx0 = x + (n.w - k0.w) / 2;
-    drawArrow(g, px, cardBottom + 2, px, cardBottom + V_GAP - 2);
-    paint(g, k0, kx0, cardBottom + V_GAP);
+
+  if (node.kids.length === 1) {
+    const child = node.kids[0];
+    const childX = x + (node.w - child.w) / 2;
+    drawArrow(g, parentCx, cardBottom + 2, parentCx, cardBottom + V_GAP - 2);
+    paintNode(g, child, childX, cardBottom + V_GAP);
     return;
   }
+
   let totalRowW = 0;
-  n.kids.forEach((kid, ri) => {
+  node.kids.forEach((kid, i) => {
     totalRowW += kid.w;
-    if (ri < n.kids.length - 1) {
+    if (i < node.kids.length - 1) {
       totalRowW += H_GAP;
     }
   });
-  const startX = x + (n.w - totalRowW) / 2;
-  const elbow = cardBottom + V_GAP + STUB;
-  const childTopY = elbow + V_GAP - 2;
+
+  const startX = x + (node.w - totalRowW) / 2;
+  const elbowY = cardBottom + V_GAP + STUB;
+  const childTopY = elbowY + V_GAP - 2;
   let curX = startX;
-  n.kids.forEach((kid) => {
-    const cx2 = curX + kid.w / 2;
-    drawBranchConnector(g, px, cardBottom + 2, cx2, childTopY);
-    paint(g, kid, curX, elbow + V_GAP);
+
+  node.kids.forEach((kid) => {
+    const kidCx = curX + kid.w / 2;
+    drawBranchConnector(g, parentCx, cardBottom + 2, kidCx, childTopY);
+    paintNode(g, kid, curX, elbowY + V_GAP);
     curX += kid.w + H_GAP;
   });
 }
 
-export function renderDescribeBlock(block: DescribeBlock): HTMLDivElement {
-  const sized = sizeDescribe(block);
-  const svgW = Math.max(sized.w + SIDE_PAD * 2, 320);
-  const svgH = sized.h + TOP_PAD * 2;
-  const wrap = document.createElement("div");
-  wrap.id = "tree-wrap";
-  wrap.style.boxSizing = "border-box";
-  wrap.style.display = "block";
-  wrap.style.maxWidth = "none";
-  wrap.style.overflow = "visible";
-  wrap.style.width = "fit-content";
-  const svgEl = document.createElementNS(SVG_NS, "svg");
-  svgEl.setAttribute("data-svg-base-h", String(svgH));
-  svgEl.setAttribute("data-svg-base-w", String(svgW));
-  svgEl.setAttribute("height", String(svgH));
-  svgEl.setAttribute("overflow", "visible");
-  svgEl.setAttribute("viewBox", `0 0 ${String(svgW)} ${String(svgH)}`);
-  svgEl.setAttribute("width", String(svgW));
-  svgEl.style.display = "block";
-  const defs = document.createElementNS(SVG_NS, "defs");
+function createArrowMarker(): SVGElement {
   const marker = document.createElementNS(SVG_NS, "marker");
   marker.setAttribute("id", "vex-arr");
   marker.setAttribute("markerWidth", "8");
@@ -161,12 +137,40 @@ export function renderDescribeBlock(block: DescribeBlock): HTMLDivElement {
   marker.setAttribute("refX", "7");
   marker.setAttribute("refY", "3");
   marker.setAttribute("orient", "auto");
-  marker.appendChild(elSvg("polygon", { fill: LINE_COLOR, points: "0 0, 8 3, 0 6" }, []));
-  defs.appendChild(marker);
-  svgEl.appendChild(defs);
+  marker.appendChild(createSvgElement("polygon", { fill: LINE_COLOR, points: "0 0, 8 3, 0 6" }));
+  return marker;
+}
+
+export function renderDescribeBlock(block: DescribeBlock): HTMLDivElement {
+  const sized = sizeDescribe(block);
+  const svgW = Math.max(sized.w + SIDE_PAD * 2, 320);
+  const svgH = sized.h + TOP_PAD * 2;
+
+  const wrap = document.createElement("div");
+  wrap.id = "tree-wrap";
+  wrap.style.boxSizing = "border-box";
+  wrap.style.display = "block";
+  wrap.style.maxWidth = "none";
+  wrap.style.overflow = "visible";
+  wrap.style.width = "fit-content";
+
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("data-svg-base-h", String(svgH));
+  svg.setAttribute("data-svg-base-w", String(svgW));
+  svg.setAttribute("height", String(svgH));
+  svg.setAttribute("overflow", "visible");
+  svg.setAttribute("viewBox", `0 0 ${String(svgW)} ${String(svgH)}`);
+  svg.setAttribute("width", String(svgW));
+  svg.style.display = "block";
+
+  const defs = document.createElementNS(SVG_NS, "defs");
+  defs.appendChild(createArrowMarker());
+  svg.appendChild(defs);
+
   const g = document.createElementNS(SVG_NS, "g");
-  svgEl.appendChild(g);
-  paint(g, sized, SIDE_PAD, TOP_PAD);
-  wrap.appendChild(svgEl);
+  svg.appendChild(g);
+  paintNode(g, sized, SIDE_PAD, TOP_PAD);
+
+  wrap.appendChild(svg);
   return wrap;
 }
