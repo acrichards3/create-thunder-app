@@ -318,7 +318,7 @@ var VEX_STEPPER_INLINE_CSS = `
 
 // src/stepper-html.ts
 function buildStepperHtml() {
-  return '<!DOCTYPE html><html lang="en"><head>' + '<meta charset="UTF-8" />' + `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />` + '<meta name="viewport" content="width=device-width, initial-scale=1.0" />' + "<title>Vex</title>" + "<style>" + VEX_STEPPER_INLINE_CSS + "</style></head><body>" + '<div class="vex-shell">' + '<div class="vex-shell-header">' + '<p class="vex-title" id="vex-agent-name">Agent Workflows</p>' + '<div class="vex-shell-header-right">' + '<button type="button" class="vex-open-visual" id="vex-open-visual">Open tree view</button>' + "</div></div>" + '<div id="vex-stepper-area"></div>' + "</div>" + "<script>" + INLINE_SCRIPT + "</script></body></html>";
+  return '<!DOCTYPE html><html lang="en"><head>' + '<meta charset="UTF-8" />' + `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />` + '<meta name="viewport" content="width=device-width, initial-scale=1.0" />' + "<title>Vex</title>" + "<style>" + VEX_STEPPER_INLINE_CSS + "</style></head><body>" + '<div class="vex-shell">' + '<div class="vex-shell-header">' + '<p class="vex-title" id="vex-agent-name">Agent Workflows</p>' + '<div class="vex-shell-header-right">' + '<button type="button" class="vex-open-visual" id="vex-refresh" title="Refresh active agent">&#x21bb;</button>' + '<button type="button" class="vex-open-visual" id="vex-open-visual">Open tree view</button>' + "</div></div>" + '<div id="vex-stepper-area"></div>' + "</div>" + "<script>" + INLINE_SCRIPT + "</script></body></html>";
 }
 var INLINE_SCRIPT = [
   "(function () {",
@@ -397,6 +397,12 @@ var INLINE_SCRIPT = [
   "      }",
   "      return;",
   "    }",
+  "    var refreshBtn = e.target.closest('#vex-refresh');",
+  "    if (refreshBtn) {",
+  '      vscodeApi.postMessage({ type: "refreshWindow" });',
+  "      return;",
+  "    }",
+  "",
   "    var openBtn = e.target.closest('#vex-open-visual');",
   "    if (openBtn) {",
   '      vscodeApi.postMessage({ type: "openEditorVisual" });',
@@ -1285,6 +1291,9 @@ function activate(context) {
         }
         if (message.type === "requestState") {
           poll();
+        }
+        if (message.type === "refreshWindow") {
+          vscode4.commands.executeCommand("workbench.action.reloadWindow");
         }
       });
       webviewView.onDidDispose(() => {

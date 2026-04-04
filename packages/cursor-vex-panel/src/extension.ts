@@ -120,6 +120,9 @@ export function activate(context: ExtensionContext): void {
         if (message.type === "requestState") {
           void poll();
         }
+        if (message.type === "refreshWindow") {
+          void vscode.commands.executeCommand("workbench.action.reloadWindow");
+        }
       });
 
       webviewView.onDidDispose(() => {

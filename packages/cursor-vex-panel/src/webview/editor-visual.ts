@@ -44,10 +44,15 @@ const vscode = acquireVsCodeApi();
 const viewportEl = document.getElementById("vex-ed-viewport");
 const contentEl = document.getElementById("vex-ed-content");
 
-let selectedTabIndex = 0;
+const savedEditorState = vscode.getState() as { selectedTabIndex?: number } | undefined;
+let selectedTabIndex = savedEditorState?.selectedTabIndex ?? 0;
 let lastDescribeCount = 0;
 let lastDocument: VexDocument | null = null;
 let hasDoneInitialViewportReset = false;
+
+function saveEditorState(): void {
+  vscode.setState({ selectedTabIndex });
+}
 
 const vpState = viewportEl && contentEl ? createViewportState(viewportEl, contentEl) : null;
 
@@ -75,8 +80,9 @@ function renderDocument(vexDoc: VexDocument, resetViewport: boolean): void {
     return;
   }
 
-  if (vexDoc.describes.length !== lastDescribeCount) {
+  if (lastDescribeCount > 0 && vexDoc.describes.length !== lastDescribeCount) {
     selectedTabIndex = 0;
+    saveEditorState();
   }
   lastDescribeCount = vexDoc.describes.length;
   if (selectedTabIndex >= vexDoc.describes.length) {
@@ -93,6 +99,7 @@ function renderDocument(vexDoc: VexDocument, resetViewport: boolean): void {
       btn.textContent = d.label;
       btn.addEventListener("click", function onTabClick() {
         selectedTabIndex = index;
+        saveEditorState();
         if (lastDocument !== null) {
           renderDocument(lastDocument, true);
         }
