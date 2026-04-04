@@ -1,5 +1,5 @@
 {
-  "name": "@vex-app/cursor-vex-panel",
+  "name": "cursor-vex-panel",
   "displayName": "Vex Panel",
   "description": "Vex bottom panel (workflow stepper) and tree view for .vex files in the editor area.",
   "version": "0.0.3",
@@ -61,6 +61,8 @@
     "build": "bun run build:extension && bun run build:webview",
     "build:extension": "bun build ./src/extension.ts --outfile=./extension.js --target=node --format=cjs --external=vscode",
     "build:webview": "bun build ./src/webview/editor-visual.ts --outfile=./media/editor-visual.js --target=browser --minify",
+    "vsix": "bun run build && bunx vsce package --no-dependencies --allow-missing-repository --skip-license",
+    "vsix:install": "bun run vsix && cursor --install-extension ./cursor-vex-panel-0.0.3.vsix",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p ."
   },
@@ -69,6 +71,7 @@
     "@types/vscode": "^1.84.0",
     "@typescript-eslint/eslint-plugin": "^8",
     "@typescript-eslint/parser": "^8",
+    "@vscode/vsce": "^3.7.1",
     "eslint": "^9",
     "eslint-plugin-perfectionist": "^5",
     "eslint-plugin-sonarjs": "^4",

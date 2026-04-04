@@ -48,6 +48,95 @@ __export(exports_extension, {
 module.exports = __toCommonJS(exports_extension);
 var vscode4 = __toESM(require("vscode"));
 
+// src/cursor-state-reader.ts
+var import_node_child_process = require("node:child_process");
+var import_node_path = require("node:path");
+function isComposerDataRaw(value) {
+  return typeof value === "object" && value !== null;
+}
+function isValidComposerRaw(raw) {
+  if (typeof raw !== "object") {
+    return false;
+  }
+  if (raw === null) {
+    return false;
+  }
+  const obj = raw;
+  return typeof obj["composerId"] === "string";
+}
+function toComposerEntry(obj) {
+  const lastUpdated = typeof obj["lastUpdatedAt"] === "number" ? obj["lastUpdatedAt"] : null;
+  const name = typeof obj["name"] === "string" ? obj["name"] : "";
+  const mode = typeof obj["unifiedMode"] === "string" ? obj["unifiedMode"] : "chat";
+  return {
+    composerId: obj["composerId"],
+    isArchived: obj["isArchived"] === true,
+    isDraft: obj["isDraft"] === true,
+    lastUpdatedAt: lastUpdated,
+    name,
+    unifiedMode: mode
+  };
+}
+function resolveDbPath(context) {
+  const storageUri = context.storageUri;
+  if (storageUri == null) {
+    return "";
+  }
+  return import_node_path.resolve(storageUri.fsPath, "..", "state.vscdb");
+}
+function queryDb(dbPath) {
+  return new Promise((res, rej) => {
+    const query = "SELECT value FROM ItemTable WHERE key='composer.composerData'";
+    import_node_child_process.execFile("/usr/bin/sqlite3", [dbPath, query], { timeout: 5000 }, (err, stdout) => {
+      if (err != null) {
+        rej(err);
+        return;
+      }
+      res(stdout.trim());
+    });
+  });
+}
+function parseComposerData(raw) {
+  const empty = { activeId: null, tabs: [] };
+  if (raw.length === 0) {
+    return empty;
+  }
+  const parsed = JSON.parse(raw);
+  if (!isComposerDataRaw(parsed)) {
+    return empty;
+  }
+  const selectedIds = Array.isArray(parsed.selectedComposerIds) ? parsed.selectedComposerIds : [];
+  const focusedIds = Array.isArray(parsed.lastFocusedComposerIds) ? parsed.lastFocusedComposerIds : [];
+  const allComposers = Array.isArray(parsed.allComposers) ? parsed.allComposers : [];
+  const selectedSet = new Set(selectedIds);
+  const tabs = [];
+  allComposers.forEach((c) => {
+    if (!isValidComposerRaw(c)) {
+      return;
+    }
+    if (!selectedSet.has(c["composerId"])) {
+      return;
+    }
+    tabs.push(toComposerEntry(c));
+  });
+  let activeId = null;
+  if (focusedIds.length > 0) {
+    activeId = focusedIds[0];
+  } else if (selectedIds.length > 0) {
+    activeId = selectedIds[0];
+  }
+  return { activeId, tabs };
+}
+async function readComposerState(context) {
+  const empty = { activeId: null, tabs: [] };
+  const dbPath = resolveDbPath(context);
+  if (dbPath.length === 0) {
+    return empty;
+  }
+  const raw = await queryDb(dbPath);
+  return parseComposerData(raw);
+}
+
 // src/stepper-css.ts
 var VEX_STEPPER_INLINE_CSS = `
     :root {
@@ -118,65 +207,15 @@ var VEX_STEPPER_INLINE_CSS = `
       text-transform: uppercase;
       color: var(--vex-purple-300);
       margin: 0;
-    }
-    .vex-spec-toggle {
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      gap: 6px;
-      cursor: pointer;
-      user-select: none;
-      flex-shrink: 0;
-    }
-    .vex-spec-toggle-label {
-      font-size: 10px;
-      font-weight: 600;
-      color: var(--vex-purple-300);
+      overflow: hidden;
+      text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .vex-spec-toggle-track {
-      position: relative;
-      width: 38px;
-      height: 20px;
-      border-radius: 999px;
-      background: rgba(15, 23, 42, 0.65);
-      border: 1px solid rgba(167, 139, 250, 0.35);
-      flex-shrink: 0;
-      transition: background 0.2s ease, border-color 0.2s ease;
-    }
-    .vex-spec-toggle-track:has(.vex-spec-toggle-input:checked) {
-      background: rgba(124, 58, 237, 0.45);
-      border-color: rgba(196, 181, 253, 0.55);
-    }
-    .vex-spec-toggle-input {
-      opacity: 0;
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      margin: 0;
-      cursor: pointer;
-    }
-    .vex-spec-toggle-knob {
-      position: absolute;
-      top: 50%;
-      left: 2px;
-      width: 14px;
-      height: 14px;
-      border-radius: 999px;
-      background: var(--vscode-foreground);
-      opacity: 0.45;
-      transform: translate(0, -50%);
-      transition: transform 0.2s ease, background 0.2s ease, opacity 0.2s ease;
-      pointer-events: none;
-    }
-    .vex-spec-toggle-input:checked + .vex-spec-toggle-knob {
-      transform: translate(18px, -50%);
-      background: #c4b5fd;
-      opacity: 1;
-    }
-    .vex-spec-toggle-input:focus-visible + .vex-spec-toggle-knob {
-      outline: 2px solid var(--vscode-focusBorder);
-      outline-offset: 2px;
+    .vex-no-agents {
+      font-size: 10px;
+      color: rgba(196, 181, 253, 0.4);
+      padding: 4px 0;
+      text-align: center;
     }
     .vex-track {
       display: flex;
@@ -296,110 +335,115 @@ var VEX_STEPPER_INLINE_CSS = `
 `;
 
 // src/stepper-html.ts
-var STEPS = [
-  { label: "Describe" },
-  { label: "Spec" },
-  { label: "Approve" },
-  { label: "Build" },
-  { label: "Verify" },
-  { label: "Done" }
-];
-function escapeHtml(text) {
-  return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
-}
-function escapeAttr(text) {
-  return escapeHtml(text).replaceAll(`
-`, " ");
-}
 function buildStepperHtml() {
-  const segments = [];
-  STEPS.forEach((step, index) => {
-    const n = index + 1;
-    const isActive = index === 0;
-    const nodeClass = isActive ? "vex-node vex-node--active" : "vex-node vex-node--pending";
-    const ariaCurrent = isActive ? ' aria-current="step"' : "";
-    segments.push(`<div class="vex-step-outer" role="listitem">
-    <button type="button" class="vex-step"${ariaCurrent} data-step-index="${String(index)}" title="${escapeAttr(step.label)}">
-    <span class="vex-node-wrap">
-    <span class="${nodeClass}">
-      <span class="vex-node-num">${String(n)}</span>
-    </span>
-    </span>
-    <span class="vex-label">${escapeHtml(step.label)}</span>
-    </button>
-  </div>`);
-    if (index < STEPS.length - 1) {
-      segments.push(`<div class="vex-connector" aria-hidden="true"><span class="vex-connector-line"></span></div>`);
-    }
-  });
-  const trackInner = segments.join(`
-`);
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Vex</title>
-  <style>${VEX_STEPPER_INLINE_CSS}
-  </style>
-</head>
-<body>
-  <div class="vex-shell">
-    <div class="vex-shell-header">
-      <p class="vex-title">Progress</p>
-      <div class="vex-shell-header-right">
-        <label class="vex-spec-toggle">
-          <span class="vex-spec-toggle-label">Enable spec-first workflow</span>
-          <span class="vex-spec-toggle-track">
-            <input class="vex-spec-toggle-input" type="checkbox" role="switch" checked />
-            <span class="vex-spec-toggle-knob"></span>
-          </span>
-        </label>
-        <button type="button" class="vex-open-visual" id="vex-open-visual">Open tree view</button>
-      </div>
-    </div>
-    <div class="vex-track" role="list" aria-label="Vex workflow steps">
-${trackInner}
-    </div>
-  </div>
-  <script>
-    (function () {
-      const vscodeApi = acquireVsCodeApi();
-      const openBtn = document.getElementById("vex-open-visual");
-      if (openBtn) {
-        openBtn.addEventListener("click", function () {
-          vscodeApi.postMessage({ type: "openEditorVisual" });
-        });
-      }
-      const buttons = Array.from(document.querySelectorAll("button.vex-step"));
-      function setActive(index) {
-        buttons.forEach(function (btn, i) {
-          const node = btn.querySelector(".vex-node");
-          if (!node) {
-            return;
-          }
-          if (i === index) {
-            node.classList.remove("vex-node--pending");
-            node.classList.add("vex-node--active");
-            btn.setAttribute("aria-current", "step");
-          } else {
-            node.classList.remove("vex-node--active");
-            node.classList.add("vex-node--pending");
-            btn.removeAttribute("aria-current");
-          }
-        });
-      }
-      buttons.forEach(function (btn, index) {
-        btn.addEventListener("click", function () {
-          setActive(index);
-        });
-      });
-    })();
-  </script>
-</body>
-</html>`;
+  return '<!DOCTYPE html><html lang="en"><head>' + '<meta charset="UTF-8" />' + `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />` + '<meta name="viewport" content="width=device-width, initial-scale=1.0" />' + "<title>Vex</title>" + "<style>" + VEX_STEPPER_INLINE_CSS + "</style></head><body>" + '<div class="vex-shell">' + '<div class="vex-shell-header">' + '<p class="vex-title" id="vex-agent-name">Agent Workflows</p>' + '<div class="vex-shell-header-right">' + '<button type="button" class="vex-open-visual" id="vex-open-visual">Open tree view</button>' + "</div></div>" + '<div id="vex-stepper-area">' + '<p class="vex-no-agents">Waiting for agent data...</p>' + "</div></div>" + "<script>" + INLINE_SCRIPT + "</script></body></html>";
 }
+var INLINE_SCRIPT = [
+  "(function () {",
+  "  var vscodeApi = acquireVsCodeApi();",
+  "  var STEP_COUNT = 6;",
+  "  var activeId = null;",
+  "  var activeName = '';",
+  "  var stepByTabId = {};",
+  "",
+  "  var saved = vscodeApi.getState();",
+  "  if (saved && saved.stepByTabId) { stepByTabId = saved.stepByTabId; }",
+  "",
+  "  function saveState() { vscodeApi.setState({ stepByTabId: stepByTabId }); }",
+  "",
+  "  function getStepForTab(tabId) {",
+  "    if (stepByTabId[tabId] != null) return stepByTabId[tabId];",
+  "    return 0;",
+  "  }",
+  "",
+  "  function buildTrackHtml(activeStep) {",
+  '    var labels = ["Describe","Spec","Approve","Build","Verify","Done"];',
+  '    var out = "";',
+  "    for (var i = 0; i < labels.length; i++) {",
+  '      var cls = i === activeStep ? "vex-node vex-node--active" : "vex-node vex-node--pending";',
+  `      var aria = i === activeStep ? ' aria-current="step"' : "";`,
+  `      out += '<div class="vex-step-outer" role="listitem">'`,
+  `        + '<button type="button" class="vex-step"' + aria + ' data-step-index="' + i + '" title="' + labels[i] + '">'`,
+  `        + '<span class="vex-node-wrap"><span class="' + cls + '"><span class="vex-node-num">' + (i+1) + "</span></span></span>"`,
+  `        + '<span class="vex-label">' + labels[i] + "</span></button></div>";`,
+  "      if (i < labels.length - 1) {",
+  `        out += '<div class="vex-connector" aria-hidden="true"><span class="vex-connector-line"></span></div>';`,
+  "      }",
+  "    }",
+  "    return out;",
+  "  }",
+  "",
+  "  function renderHeader() {",
+  '    var el = document.getElementById("vex-agent-name");',
+  "    if (!el) return;",
+  "    if (activeName && activeName.length > 0) {",
+  "      el.textContent = activeName;",
+  "    } else {",
+  '      el.textContent = "Agent Workflows";',
+  "    }",
+  "  }",
+  "",
+  "  function renderStepper() {",
+  '    var area = document.getElementById("vex-stepper-area");',
+  "    if (!area) return;",
+  "    if (!activeId) {",
+  `      area.innerHTML = '<p class="vex-no-agents">No agent tabs open</p>';`,
+  "      return;",
+  "    }",
+  "    var step = getStepForTab(activeId);",
+  `    area.innerHTML = '<div class="vex-track" role="list" aria-label="Workflow steps">' + buildTrackHtml(step) + "</div>";`,
+  "  }",
+  "",
+  "  function render() { renderHeader(); renderStepper(); }",
+  "",
+  "  window.addEventListener('message', function (e) {",
+  "    var msg = e.data;",
+  "    if (!msg) return;",
+  "    if (msg.type === 'composerTabsUpdated') {",
+  "      var newId = msg.activeId;",
+  "      if (newId && newId !== activeId) {",
+  "        activeId = newId;",
+  "        activeName = '';",
+  "        var tabs = msg.tabs || [];",
+  "        for (var i = 0; i < tabs.length; i++) {",
+  "          if (tabs[i].composerId === newId) {",
+  "            activeName = tabs[i].name || '';",
+  "            break;",
+  "          }",
+  "        }",
+  "        render();",
+  "      } else if (!activeId && msg.tabs && msg.tabs.length > 0) {",
+  "        activeId = msg.tabs[0].composerId;",
+  "        activeName = msg.tabs[0].name || '';",
+  "        render();",
+  "      }",
+  "    }",
+  "  });",
+  "",
+  "  document.addEventListener('click', function (e) {",
+  "    var stepBtn = e.target.closest('.vex-step');",
+  "    if (stepBtn && activeId) {",
+  "      var stepIdx = parseInt(stepBtn.getAttribute('data-step-index'), 10);",
+  "      if (!isNaN(stepIdx) && stepIdx >= 0 && stepIdx < STEP_COUNT) {",
+  "        stepByTabId[activeId] = stepIdx;",
+  "        saveState();",
+  "        renderStepper();",
+  "      }",
+  "      return;",
+  "    }",
+  "",
+  "    var openBtn = e.target.closest('#vex-open-visual');",
+  "    if (openBtn) {",
+  '      vscodeApi.postMessage({ type: "openEditorVisual" });',
+  "      return;",
+  "    }",
+  "  });",
+  "",
+  "  render();",
+  '  vscodeApi.postMessage({ type: "requestComposerState" });',
+  "})();"
+].join(`
+`);
 
 // src/vex-tree-editor-provider.ts
 var vscode3 = __toESM(require("vscode"));
@@ -1159,15 +1203,15 @@ function createVexTreeEditorProvider(context) {
       return new VexTreeCustomDocument(uri);
     },
     resolveCustomEditor(document, webviewPanel, token) {
-      return new Promise(function(resolve, reject) {
+      return new Promise(function(resolve2, reject) {
         setTimeout(function() {
           if (token.isCancellationRequested) {
-            resolve();
+            resolve2();
             return;
           }
           try {
             resolveVexTreeEditor({ context, document, token, webviewPanel });
-            resolve();
+            resolve2();
           } catch (err) {
             reject(err instanceof Error ? err : new Error(String(err)));
           }
@@ -1180,6 +1224,7 @@ function createVexTreeEditorProvider(context) {
 // src/extension.ts
 var VIEW_ID = "vex.panel.stepper";
 var VEX_TREE_VIEW_TYPE = "vex.tree";
+var POLL_INTERVAL_MS = 2000;
 async function openVexTreeEditorForActiveFile() {
   const doc = vscode4.window.activeTextEditor?.document;
   if (doc == null) {
@@ -1196,6 +1241,33 @@ async function openVexTreeEditorForActiveFile() {
     viewColumn: vscode4.ViewColumn.Active
   });
 }
+function stateChanged(prev, next) {
+  if (prev == null) {
+    return true;
+  }
+  if (prev.activeId !== next.activeId) {
+    return true;
+  }
+  if (prev.tabs.length !== next.tabs.length) {
+    return true;
+  }
+  for (let i = 0;i < prev.tabs.length; i++) {
+    if (prev.tabs[i].composerId !== next.tabs[i].composerId) {
+      return true;
+    }
+    if (prev.tabs[i].name !== next.tabs[i].name) {
+      return true;
+    }
+  }
+  return false;
+}
+function sendComposerState(webviewView, state) {
+  webviewView.webview.postMessage({
+    activeId: state.activeId,
+    tabs: state.tabs,
+    type: "composerTabsUpdated"
+  });
+}
 function activate(context) {
   const vexTreeProvider = createVexTreeEditorProvider(context);
   context.subscriptions.push(vscode4.window.registerCustomEditorProvider(VEX_TREE_VIEW_TYPE, vexTreeProvider, {
@@ -1207,8 +1279,36 @@ function activate(context) {
   context.subscriptions.push(vscode4.commands.registerCommand("vex.panel.openEditorVisual", () => {
     return openVexTreeEditorForActiveFile();
   }));
+  let activeWebviewView;
+  let lastState = null;
+  let pollTimer;
+  async function pollComposerState() {
+    if (activeWebviewView == null) {
+      return;
+    }
+    const state = await readComposerState(context);
+    if (stateChanged(lastState, state)) {
+      lastState = state;
+      sendComposerState(activeWebviewView, state);
+    }
+  }
+  function startPolling() {
+    if (pollTimer != null) {
+      return;
+    }
+    pollTimer = setInterval(() => {
+      pollComposerState();
+    }, POLL_INTERVAL_MS);
+  }
+  function stopPolling() {
+    if (pollTimer != null) {
+      clearInterval(pollTimer);
+      pollTimer = undefined;
+    }
+  }
   const provider = {
     resolveWebviewView(webviewView) {
+      activeWebviewView = webviewView;
       webviewView.webview.options = {
         enableScripts: true
       };
@@ -1217,9 +1317,21 @@ function activate(context) {
         if (message.type === "openEditorVisual") {
           openVexTreeEditorForActiveFile();
         }
+        if (message.type === "requestComposerState") {
+          pollComposerState();
+        }
       });
+      webviewView.onDidDispose(() => {
+        if (activeWebviewView === webviewView) {
+          activeWebviewView = undefined;
+          stopPolling();
+        }
+      });
+      pollComposerState();
+      startPolling();
     }
   };
   context.subscriptions.push(vscode4.window.registerWebviewViewProvider(VIEW_ID, provider));
+  context.subscriptions.push({ dispose: stopPolling });
 }
 function deactivate() {}

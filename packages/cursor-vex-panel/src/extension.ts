@@ -1,10 +1,13 @@
-import type { ExtensionContext } from "vscode";
+import type { ExtensionContext, WebviewView } from "vscode";
 import * as vscode from "vscode";
+import { readComposerState } from "./cursor-state-reader";
+import type { ComposerTabState } from "./cursor-state-reader";
 import { buildStepperHtml } from "./stepper-html";
 import { createVexTreeEditorProvider } from "./vex-tree-editor-provider";
 
 const VIEW_ID = "vex.panel.stepper";
 const VEX_TREE_VIEW_TYPE = "vex.tree";
+const POLL_INTERVAL_MS = 2000;
 
 async function openVexTreeEditorForActiveFile(): Promise<void> {
   const doc = vscode.window.activeTextEditor?.document;
@@ -20,6 +23,35 @@ async function openVexTreeEditorForActiveFile(): Promise<void> {
   }
   await vscode.commands.executeCommand("vscode.openWith", doc.uri, VEX_TREE_VIEW_TYPE, {
     viewColumn: vscode.ViewColumn.Active,
+  });
+}
+
+function stateChanged(prev: ComposerTabState | null, next: ComposerTabState): boolean {
+  if (prev == null) {
+    return true;
+  }
+  if (prev.activeId !== next.activeId) {
+    return true;
+  }
+  if (prev.tabs.length !== next.tabs.length) {
+    return true;
+  }
+  for (let i = 0; i < prev.tabs.length; i++) {
+    if (prev.tabs[i].composerId !== next.tabs[i].composerId) {
+      return true;
+    }
+    if (prev.tabs[i].name !== next.tabs[i].name) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function sendComposerState(webviewView: WebviewView, state: ComposerTabState): void {
+  void webviewView.webview.postMessage({
+    activeId: state.activeId,
+    tabs: state.tabs,
+    type: "composerTabsUpdated",
   });
 }
 
@@ -41,8 +73,40 @@ export function activate(context: ExtensionContext): void {
     }),
   );
 
+  let activeWebviewView: WebviewView | undefined;
+  let lastState: ComposerTabState | null = null;
+  let pollTimer: ReturnType<typeof setInterval> | undefined;
+
+  async function pollComposerState(): Promise<void> {
+    if (activeWebviewView == null) {
+      return;
+    }
+    const state = await readComposerState(context);
+    if (stateChanged(lastState, state)) {
+      lastState = state;
+      sendComposerState(activeWebviewView, state);
+    }
+  }
+
+  function startPolling(): void {
+    if (pollTimer != null) {
+      return;
+    }
+    pollTimer = setInterval(() => {
+      void pollComposerState();
+    }, POLL_INTERVAL_MS);
+  }
+
+  function stopPolling(): void {
+    if (pollTimer != null) {
+      clearInterval(pollTimer);
+      pollTimer = undefined;
+    }
+  }
+
   const provider = {
-    resolveWebviewView(webviewView: vscode.WebviewView): void {
+    resolveWebviewView(webviewView: WebviewView): void {
+      activeWebviewView = webviewView;
       webviewView.webview.options = {
         enableScripts: true,
       };
@@ -52,11 +116,25 @@ export function activate(context: ExtensionContext): void {
         if (message.type === "openEditorVisual") {
           void openVexTreeEditorForActiveFile();
         }
+        if (message.type === "requestComposerState") {
+          void pollComposerState();
+        }
       });
+
+      webviewView.onDidDispose(() => {
+        if (activeWebviewView === webviewView) {
+          activeWebviewView = undefined;
+          stopPolling();
+        }
+      });
+
+      void pollComposerState();
+      startPolling();
     },
   };
 
   context.subscriptions.push(vscode.window.registerWebviewViewProvider(VIEW_ID, provider));
+  context.subscriptions.push({ dispose: stopPolling });
 }
 
 export function deactivate(): void {}

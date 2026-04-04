@@ -84,7 +84,7 @@
     "build": "bun run build:lib && bun run typecheck && bun run lint && bun run build:frontend && bun run build:backend && bun run build:cursor-vex-panel",
     "build:all": "bun run build:lib && bun run build:frontend && bun run build:backend",
     "build:backend": "bun run --filter @vex-app/backend build",
-    "build:cursor-vex-panel": "bun run --filter @vex-app/cursor-vex-panel build",
+    "build:cursor-vex-panel": "bun run --filter cursor-vex-panel build",
     "build:frontend": "bun run --filter @vex-app/frontend build",
     "build:lib": "bun run --filter @vex-app/lib build",
     "dev": "bun scripts/dev.ts",
@@ -106,9 +106,9 @@
     "test:lib": "bun run --filter @vex-app/lib test",
     "test:db:up": "docker compose -f docker-compose.test.yml up -d --wait",
     "test:db:down": "docker compose -f docker-compose.test.yml down",
-    "typecheck": "bun tsc -b --clean && bun tsc -b && bun run --filter @vex-app/cursor-vex-panel typecheck",
-    "feature-workflow:vsix": "cd packages/cursor-feature-workflow && bun run vsix",
-    "feature-workflow:install": "cd packages/cursor-feature-workflow && bun run vsix:install"
+    "typecheck": "bun tsc -b --clean && bun tsc -b && bun run --filter cursor-vex-panel typecheck",
+    "vex-panel:vsix": "cd packages/cursor-vex-panel && bun run vsix",
+    "vex-panel:install": "cd packages/cursor-vex-panel && bun run vsix:install"
   },
   "devDependencies": {
     "@types/bun": "^1.3.5",

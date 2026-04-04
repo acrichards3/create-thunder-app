@@ -67,65 +67,15 @@ export const VEX_STEPPER_INLINE_CSS = `
       text-transform: uppercase;
       color: var(--vex-purple-300);
       margin: 0;
-    }
-    .vex-spec-toggle {
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      gap: 6px;
-      cursor: pointer;
-      user-select: none;
-      flex-shrink: 0;
-    }
-    .vex-spec-toggle-label {
-      font-size: 10px;
-      font-weight: 600;
-      color: var(--vex-purple-300);
+      overflow: hidden;
+      text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .vex-spec-toggle-track {
-      position: relative;
-      width: 38px;
-      height: 20px;
-      border-radius: 999px;
-      background: rgba(15, 23, 42, 0.65);
-      border: 1px solid rgba(167, 139, 250, 0.35);
-      flex-shrink: 0;
-      transition: background 0.2s ease, border-color 0.2s ease;
-    }
-    .vex-spec-toggle-track:has(.vex-spec-toggle-input:checked) {
-      background: rgba(124, 58, 237, 0.45);
-      border-color: rgba(196, 181, 253, 0.55);
-    }
-    .vex-spec-toggle-input {
-      opacity: 0;
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      margin: 0;
-      cursor: pointer;
-    }
-    .vex-spec-toggle-knob {
-      position: absolute;
-      top: 50%;
-      left: 2px;
-      width: 14px;
-      height: 14px;
-      border-radius: 999px;
-      background: var(--vscode-foreground);
-      opacity: 0.45;
-      transform: translate(0, -50%);
-      transition: transform 0.2s ease, background 0.2s ease, opacity 0.2s ease;
-      pointer-events: none;
-    }
-    .vex-spec-toggle-input:checked + .vex-spec-toggle-knob {
-      transform: translate(18px, -50%);
-      background: #c4b5fd;
-      opacity: 1;
-    }
-    .vex-spec-toggle-input:focus-visible + .vex-spec-toggle-knob {
-      outline: 2px solid var(--vscode-focusBorder);
-      outline-offset: 2px;
+    .vex-no-agents {
+      font-size: 10px;
+      color: rgba(196, 181, 253, 0.4);
+      padding: 4px 0;
+      text-align: center;
     }
     .vex-track {
       display: flex;
