@@ -88,8 +88,12 @@
         "typescript": "^6.0.0",
       },
     },
-    "packages/cursor-vex-panel": {
-      "name": "@vex-app/cursor-vex-panel",
+    "packages/vex-language": {
+      "name": "vex-spec",
+      "version": "0.0.4",
+    },
+    "packages/vex-studio": {
+      "name": "vex-studio",
       "version": "0.0.3",
       "devDependencies": {
         "@types/node": "^20.0.0",
@@ -103,10 +107,6 @@
         "eslint-plugin-unicorn": "56",
         "typescript": "^6.0.0",
       },
-    },
-    "packages/vex-language": {
-      "name": "vex-spec",
-      "version": "0.0.4",
     },
   },
   "packages": {
@@ -503,8 +503,6 @@
     "@ungap/structured-clone": ["@ungap/structured-clone@1.3.0", "", {}, "sha512-WmoN8qaIAo7WTYWbAZuG8PYEhn5fkz7dZrqTBZ7dtt//lL2Gwms1IcnQ5yHqjDfX8Ft5j4YzDM23f87zBfDe9g=="],
 
     "@vex-app/backend": ["@vex-app/backend@workspace:backend"],
-
-    "@vex-app/cursor-vex-panel": ["@vex-app/cursor-vex-panel@workspace:packages/cursor-vex-panel"],
 
     "@vex-app/frontend": ["@vex-app/frontend@workspace:frontend"],
 
@@ -1509,6 +1507,8 @@
     "version-range": ["version-range@4.15.0", "", {}, "sha512-Ck0EJbAGxHwprkzFO966t4/5QkRuzh+/I1RxhLgUKKwEn+Cd8NwM60mE3AqBZg5gYODoXW0EFsQvbZjRlvdqbg=="],
 
     "vex-spec": ["vex-spec@workspace:packages/vex-language"],
+
+    "vex-studio": ["vex-studio@workspace:packages/vex-studio"],
 
     "vite": ["vite@5.4.21", "", { "dependencies": { "esbuild": "^0.21.3", "postcss": "^8.4.43", "rollup": "^4.20.0" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^18.0.0 || >=20.0.0", "less": "*", "lightningcss": "^1.21.0", "sass": "*", "sass-embedded": "*", "stylus": "*", "sugarss": "*", "terser": "^5.4.0" }, "optionalPeers": ["@types/node", "less", "lightningcss", "sass", "sass-embedded", "stylus", "sugarss", "terser"], "bin": { "vite": "bin/vite.js" } }, "sha512-o5a9xKjbtuhY6Bi5S3+HvbRERmouabWbyUcpXXUA1u+GNUKoROi9byOJ8M0nHbHYHkYICiMlqxkg1KkYmm25Sw=="],
 

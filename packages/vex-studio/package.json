@@ -1,7 +1,7 @@
 {
-  "name": "cursor-vex-panel",
-  "displayName": "Vex Panel",
-  "description": "Vex bottom panel (workflow stepper) and tree view for .vex files in the editor area.",
+  "name": "vex-studio",
+  "displayName": "Vex Studio",
+  "description": "Workflow stepper and visual tree editor for .vex spec files.",
   "version": "0.0.3",
   "private": true,
   "publisher": "vex-app",
@@ -62,7 +62,7 @@
     "build:extension": "bun build ./src/extension.ts --outfile=./extension.js --target=node --format=cjs --external=vscode",
     "build:webview": "bun build ./src/webview/editor-visual.ts --outfile=./media/editor-visual.js --target=browser --minify",
     "vsix": "bun run build && bunx vsce package --no-dependencies --allow-missing-repository --skip-license",
-    "vsix:install": "bun run vsix && cursor --install-extension ./cursor-vex-panel-0.0.3.vsix",
+    "vsix:install": "bun run vsix && cursor --install-extension ./vex-studio-0.0.3.vsix",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p ."
   },

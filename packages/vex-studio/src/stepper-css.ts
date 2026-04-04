@@ -19,6 +19,37 @@ export const VEX_STEPPER_INLINE_CSS = `
       border: 1px solid rgba(167, 139, 250, 0.28);
       box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.12), 0 6px 20px rgba(15, 23, 42, 0.4);
     }
+    .vex-shell--disabled {
+      background: linear-gradient(145deg, rgba(50, 50, 60, 0.22), rgba(30, 30, 40, 0.35));
+      border-color: rgba(120, 120, 130, 0.25);
+      box-shadow: 0 0 0 1px rgba(80, 80, 90, 0.1), 0 6px 20px rgba(15, 23, 42, 0.3);
+    }
+    .vex-shell--disabled .vex-title,
+    .vex-shell--disabled .vex-label,
+    .vex-shell--disabled .vex-node-num {
+      color: rgba(160, 160, 170, 0.5);
+    }
+    .vex-shell--disabled .vex-node--active,
+    .vex-shell--disabled .vex-node--pending {
+      background: rgba(80, 80, 90, 0.35);
+      border-color: rgba(140, 140, 150, 0.3);
+      box-shadow: none;
+      color: rgba(160, 160, 170, 0.5);
+    }
+    .vex-shell--disabled .vex-connector-line {
+      background: rgba(120, 120, 130, 0.3);
+      opacity: 0.5;
+    }
+    .vex-shell--disabled .vex-step {
+      pointer-events: none;
+      cursor: default;
+    }
+    .vex-shell--disabled .vex-open-visual {
+      border-color: rgba(140, 140, 150, 0.3);
+      background: rgba(80, 80, 90, 0.25);
+      color: rgba(160, 160, 170, 0.5);
+      pointer-events: none;
+    }
     .vex-shell-header {
       display: flex;
       flex-direction: row;
@@ -185,5 +216,48 @@ export const VEX_STEPPER_INLINE_CSS = `
       border-radius: 999px;
       background: linear-gradient(90deg, rgba(167, 139, 250, 0.15), rgba(167, 139, 250, 0.85), rgba(167, 139, 250, 0.15));
       opacity: 0.85;
+    }
+    .vex-toggle {
+      position: relative;
+      width: 32px;
+      height: 18px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .vex-toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+      position: absolute;
+    }
+    .vex-toggle-track {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: rgba(76, 29, 149, 0.5);
+      border: 1px solid rgba(167, 139, 250, 0.3);
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+    .vex-toggle-thumb {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(196, 181, 253, 0.6);
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+    .vex-toggle input:checked ~ .vex-toggle-track {
+      background: rgba(124, 58, 237, 0.7);
+      border-color: rgba(196, 181, 253, 0.5);
+    }
+    .vex-toggle input:checked ~ .vex-toggle-thumb {
+      transform: translateX(14px);
+      background: #ede9fe;
+    }
+    .vex-toggle input:focus-visible ~ .vex-toggle-track {
+      outline: 2px solid var(--vscode-focusBorder);
+      outline-offset: 2px;
     }
 `;

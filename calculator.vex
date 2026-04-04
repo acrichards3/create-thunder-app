@@ -22,7 +22,7 @@ describe: Calculator
                 it: Shows an error instead of a numeric result
         when: the user taps all clear
             it: Resets the current entry and pending operation
-
+            
 describe: Memory
     when: the user taps M+
         it: Adds the displayed value to the stored memory

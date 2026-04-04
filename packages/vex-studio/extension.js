@@ -141,6 +141,37 @@ var VEX_STEPPER_INLINE_CSS = `
       border: 1px solid rgba(167, 139, 250, 0.28);
       box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.12), 0 6px 20px rgba(15, 23, 42, 0.4);
     }
+    .vex-shell--disabled {
+      background: linear-gradient(145deg, rgba(50, 50, 60, 0.22), rgba(30, 30, 40, 0.35));
+      border-color: rgba(120, 120, 130, 0.25);
+      box-shadow: 0 0 0 1px rgba(80, 80, 90, 0.1), 0 6px 20px rgba(15, 23, 42, 0.3);
+    }
+    .vex-shell--disabled .vex-title,
+    .vex-shell--disabled .vex-label,
+    .vex-shell--disabled .vex-node-num {
+      color: rgba(160, 160, 170, 0.5);
+    }
+    .vex-shell--disabled .vex-node--active,
+    .vex-shell--disabled .vex-node--pending {
+      background: rgba(80, 80, 90, 0.35);
+      border-color: rgba(140, 140, 150, 0.3);
+      box-shadow: none;
+      color: rgba(160, 160, 170, 0.5);
+    }
+    .vex-shell--disabled .vex-connector-line {
+      background: rgba(120, 120, 130, 0.3);
+      opacity: 0.5;
+    }
+    .vex-shell--disabled .vex-step {
+      pointer-events: none;
+      cursor: default;
+    }
+    .vex-shell--disabled .vex-open-visual {
+      border-color: rgba(140, 140, 150, 0.3);
+      background: rgba(80, 80, 90, 0.25);
+      color: rgba(160, 160, 170, 0.5);
+      pointer-events: none;
+    }
     .vex-shell-header {
       display: flex;
       flex-direction: row;
@@ -308,11 +339,54 @@ var VEX_STEPPER_INLINE_CSS = `
       background: linear-gradient(90deg, rgba(167, 139, 250, 0.15), rgba(167, 139, 250, 0.85), rgba(167, 139, 250, 0.15));
       opacity: 0.85;
     }
+    .vex-toggle {
+      position: relative;
+      width: 32px;
+      height: 18px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .vex-toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+      position: absolute;
+    }
+    .vex-toggle-track {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: rgba(76, 29, 149, 0.5);
+      border: 1px solid rgba(167, 139, 250, 0.3);
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+    .vex-toggle-thumb {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(196, 181, 253, 0.6);
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+    .vex-toggle input:checked ~ .vex-toggle-track {
+      background: rgba(124, 58, 237, 0.7);
+      border-color: rgba(196, 181, 253, 0.5);
+    }
+    .vex-toggle input:checked ~ .vex-toggle-thumb {
+      transform: translateX(14px);
+      background: #ede9fe;
+    }
+    .vex-toggle input:focus-visible ~ .vex-toggle-track {
+      outline: 2px solid var(--vscode-focusBorder);
+      outline-offset: 2px;
+    }
 `;
 
 // src/stepper-html.ts
 function buildStepperHtml() {
-  return '<!DOCTYPE html><html lang="en"><head>' + '<meta charset="UTF-8" />' + `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />` + '<meta name="viewport" content="width=device-width, initial-scale=1.0" />' + "<title>Vex</title>" + "<style>" + VEX_STEPPER_INLINE_CSS + "</style></head><body>" + '<div class="vex-shell">' + '<div class="vex-shell-header">' + '<p class="vex-title" id="vex-agent-name">Agent Workflows</p>' + '<div class="vex-shell-header-right">' + '<button type="button" class="vex-open-visual" id="vex-refresh" title="Refresh active agent">&#x21bb;</button>' + '<button type="button" class="vex-open-visual" id="vex-open-visual">Open tree view</button>' + "</div></div>" + '<div id="vex-stepper-area"></div>' + "</div>" + "<script>" + INLINE_SCRIPT + "</script></body></html>";
+  return '<!DOCTYPE html><html lang="en"><head>' + '<meta charset="UTF-8" />' + `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />` + '<meta name="viewport" content="width=device-width, initial-scale=1.0" />' + "<title>Vex</title>" + "<style>" + VEX_STEPPER_INLINE_CSS + "</style></head><body>" + '<div class="vex-shell">' + '<div class="vex-shell-header">' + '<p class="vex-title" id="vex-agent-name">Agent Workflows</p>' + '<div class="vex-shell-header-right">' + '<button type="button" class="vex-open-visual" id="vex-refresh" title="Refresh active agent">&#x21bb;</button>' + '<button type="button" class="vex-open-visual" id="vex-open-visual">Open tree view</button>' + '<label class="vex-toggle" title="Enable workflow tracking">' + '<input type="checkbox" id="vex-workflow-toggle" />' + '<span class="vex-toggle-track"></span>' + '<span class="vex-toggle-thumb"></span>' + "</label>" + "</div></div>" + '<div id="vex-stepper-area"></div>' + "</div>" + "<script>" + INLINE_SCRIPT + "</script></body></html>";
 }
 var INLINE_SCRIPT = [
   "(function () {",
@@ -322,10 +396,13 @@ var INLINE_SCRIPT = [
   "  var activeName = '';",
   "  var stepByTabId = {};",
   "",
+  "  var workflowEnabled = true;",
+  "",
   "  var saved = vscodeApi.getState();",
   "  if (saved && saved.stepByTabId) { stepByTabId = saved.stepByTabId; }",
+  "  if (saved && typeof saved.workflowEnabled === 'boolean') { workflowEnabled = saved.workflowEnabled; }",
   "",
-  "  function saveState() { vscodeApi.setState({ stepByTabId: stepByTabId }); }",
+  "  function saveState() { vscodeApi.setState({ stepByTabId: stepByTabId, workflowEnabled: workflowEnabled }); }",
   "",
   "  function getStep() {",
   "    if (activeId && stepByTabId[activeId] != null) return stepByTabId[activeId];",
@@ -349,15 +426,26 @@ var INLINE_SCRIPT = [
   "    return out;",
   "  }",
   "",
+  "  function syncToggle() {",
+  '    var cb = document.getElementById("vex-workflow-toggle");',
+  "    if (cb) { cb.checked = workflowEnabled; }",
+  "  }",
+  "",
   "  function render() {",
   '    var title = document.getElementById("vex-agent-name");',
   "    if (title) {",
   "      title.textContent = (activeName && activeName.length > 0) ? activeName : 'Agent Workflows';",
   "    }",
+  '    var shell = document.querySelector(".vex-shell");',
+  "    if (shell) {",
+  "      if (workflowEnabled) { shell.classList.remove('vex-shell--disabled'); }",
+  "      else { shell.classList.add('vex-shell--disabled'); }",
+  "    }",
   '    var area = document.getElementById("vex-stepper-area");',
   "    if (area) {",
   `      area.innerHTML = '<div class="vex-track" role="list" aria-label="Workflow steps">' + buildTrackHtml(getStep()) + "</div>";`,
   "    }",
+  "    syncToggle();",
   "  }",
   "",
   "  window.addEventListener('message', function (e) {",
@@ -403,6 +491,15 @@ var INLINE_SCRIPT = [
   "      return;",
   "    }",
   "  });",
+  "",
+  "  var toggleEl = document.getElementById('vex-workflow-toggle');",
+  "  if (toggleEl) {",
+  "    toggleEl.addEventListener('change', function () {",
+  "      workflowEnabled = toggleEl.checked;",
+  "      saveState();",
+  "      render();",
+  "    });",
+  "  }",
   "",
   "  render();",
   '  vscodeApi.postMessage({ type: "requestState" });',

@@ -40,8 +40,8 @@ jobs:
       - name: Build lib package
         run: bun run build:lib
 
-      - name: Build cursor-vex-panel package
-        run: bun run build:cursor-vex-panel
+      - name: Build vex-studio package
+        run: bun run build:vex-studio
 
       - name: Run lint
         run: bun run lint

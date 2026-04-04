@@ -16,6 +16,11 @@ export function buildStepperHtml(): string {
     '<div class="vex-shell-header-right">' +
     '<button type="button" class="vex-open-visual" id="vex-refresh" title="Refresh active agent">&#x21bb;</button>' +
     '<button type="button" class="vex-open-visual" id="vex-open-visual">Open tree view</button>' +
+    '<label class="vex-toggle" title="Enable workflow tracking">' +
+    '<input type="checkbox" id="vex-workflow-toggle" />' +
+    '<span class="vex-toggle-track"></span>' +
+    '<span class="vex-toggle-thumb"></span>' +
+    "</label>" +
     "</div></div>" +
     '<div id="vex-stepper-area"></div>' +
     "</div>" +
@@ -33,10 +38,13 @@ const INLINE_SCRIPT = [
   "  var activeName = '';",
   "  var stepByTabId = {};",
   "",
+  "  var workflowEnabled = true;",
+  "",
   "  var saved = vscodeApi.getState();",
   "  if (saved && saved.stepByTabId) { stepByTabId = saved.stepByTabId; }",
+  "  if (saved && typeof saved.workflowEnabled === 'boolean') { workflowEnabled = saved.workflowEnabled; }",
   "",
-  "  function saveState() { vscodeApi.setState({ stepByTabId: stepByTabId }); }",
+  "  function saveState() { vscodeApi.setState({ stepByTabId: stepByTabId, workflowEnabled: workflowEnabled }); }",
   "",
   "  function getStep() {",
   "    if (activeId && stepByTabId[activeId] != null) return stepByTabId[activeId];",
@@ -60,15 +68,26 @@ const INLINE_SCRIPT = [
   "    return out;",
   "  }",
   "",
+  "  function syncToggle() {",
+  '    var cb = document.getElementById("vex-workflow-toggle");',
+  "    if (cb) { cb.checked = workflowEnabled; }",
+  "  }",
+  "",
   "  function render() {",
   '    var title = document.getElementById("vex-agent-name");',
   "    if (title) {",
   "      title.textContent = (activeName && activeName.length > 0) ? activeName : 'Agent Workflows';",
   "    }",
+  '    var shell = document.querySelector(".vex-shell");',
+  "    if (shell) {",
+  "      if (workflowEnabled) { shell.classList.remove('vex-shell--disabled'); }",
+  "      else { shell.classList.add('vex-shell--disabled'); }",
+  "    }",
   '    var area = document.getElementById("vex-stepper-area");',
   "    if (area) {",
   '      area.innerHTML = \'<div class="vex-track" role="list" aria-label="Workflow steps">\' + buildTrackHtml(getStep()) + "</div>";',
   "    }",
+  "    syncToggle();",
   "  }",
   "",
   "  window.addEventListener('message', function (e) {",
@@ -114,6 +133,15 @@ const INLINE_SCRIPT = [
   "      return;",
   "    }",
   "  });",
+  "",
+  "  var toggleEl = document.getElementById('vex-workflow-toggle');",
+  "  if (toggleEl) {",
+  "    toggleEl.addEventListener('change', function () {",
+  "      workflowEnabled = toggleEl.checked;",
+  "      saveState();",
+  "      render();",
+  "    });",
+  "  }",
   "",
   "  render();",
   '  vscodeApi.postMessage({ type: "requestState" });',
