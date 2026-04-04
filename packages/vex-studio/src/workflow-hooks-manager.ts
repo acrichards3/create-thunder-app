@@ -111,22 +111,54 @@ fi
 TOOL=$(echo "$INPUT" | jq -r '.tool_name // empty')
 FILE=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 
-# Describe step — block everything except the .vex-advance signal
-if [ "$STEP" = "0" ]; then
-  BASENAME=$(basename "$FILE")
-  if [ "$TOOL" = "Write" ] && [ "$BASENAME" = ".vex-advance" ]; then
-    ACTIVE_ID=$(jq -r '.activeId // ""' "$STATE_FILE" 2>/dev/null)
-    printf '{"step":1,"enabled":true,"activeId":"%s"}' "$ACTIVE_ID" > "$STATE_FILE"
+BASENAME=$(basename "$FILE")
 
-    AGENT_MSG="The workflow has advanced to the **Spec** step (Step 2 of 6). The .vex-advance file was intercepted — no file was created. You will receive updated instructions for the Spec step in your next context."
-    echo "{\\"permission\\": \\"deny\\", \\"agent_message\\": $(echo "$AGENT_MSG" | jq -Rs .)}"
-    exit 2
-  fi
+advance_step() {
+  local NEXT_STEP="$1"
+  local NEXT_NAME="$2"
+  ACTIVE_ID=$(jq -r '.activeId // ""' "$STATE_FILE" 2>/dev/null)
+  printf '{"step":%d,"enabled":true,"activeId":"%s"}' "$NEXT_STEP" "$ACTIVE_ID" > "$STATE_FILE"
+  AGENT_MSG="The workflow has advanced to the **$NEXT_NAME** step. The .vex-advance file was intercepted — no file was created. You will receive updated instructions in your next context."
+  echo "{\\"permission\\": \\"deny\\", \\"agent_message\\": $(echo "$AGENT_MSG" | jq -Rs .)}"
+  exit 2
+}
 
-  AGENT_MSG="You are in the **Describe** step of the Vex workflow. You have NO write access. Do not create, modify, or delete files. Do not run shell commands. Focus on understanding the user's requirements and asking clarifying questions. When you are ready to proceed, write the file \\\`.vex-advance\\\` with the content \\\`spec\\\`."
-  USER_MSG="Blocked: agent attempted to use $TOOL during the Describe step (no write access)."
+deny_with_msg() {
+  local AGENT_MSG="$1"
+  local USER_MSG="$2"
   echo "{\\"permission\\": \\"deny\\", \\"agent_message\\": $(echo "$AGENT_MSG" | jq -Rs .), \\"user_message\\": $(echo "$USER_MSG" | jq -Rs .)}"
   exit 2
+}
+
+# Describe step — block everything except the .vex-advance signal
+if [ "$STEP" = "0" ]; then
+  if [ "$TOOL" = "Write" ] && [ "$BASENAME" = ".vex-advance" ]; then
+    advance_step 1 "Spec"
+  fi
+  deny_with_msg \
+    "You are in the **Describe** step of the Vex workflow. You have NO write access. Focus on understanding the user's requirements and asking clarifying questions. When ready, write \\\`.vex-advance\\\` with the content \\\`spec\\\`." \
+    "Blocked: agent attempted to use $TOOL during the Describe step (no write access)."
+fi
+
+# Spec step — allow .vex file writes only, block everything else
+if [ "$STEP" = "1" ]; then
+  if [ "$TOOL" = "Write" ] && [ "$BASENAME" = ".vex-advance" ]; then
+    advance_step 2 "Approve"
+  fi
+  if [ "$TOOL" = "Write" ] && [[ "$FILE" == *.vex ]]; then
+    echo '{"permission": "allow"}'
+    exit 0
+  fi
+  deny_with_msg \
+    "You are in the **Spec** step of the Vex workflow. You may ONLY write \`.vex\` files. All other writes, deletes, and shell commands are blocked. When all specs are complete, write \`.vex-advance\` with the content \`approve\`." \
+    "Blocked: agent attempted to use $TOOL on a non-.vex file during the Spec step."
+fi
+
+# Approve step — block everything, user is reviewing
+if [ "$STEP" = "2" ]; then
+  deny_with_msg \
+    "You are in the **Approve** step of the Vex workflow. STOP. Do not take any actions. The user is reviewing your specs. Wait for them to approve or request changes." \
+    "Blocked: agent attempted to use $TOOL during the Approve step (waiting for user review)."
 fi
 
 echo '{"permission": "allow"}'

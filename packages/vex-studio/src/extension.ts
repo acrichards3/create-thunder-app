@@ -4,6 +4,7 @@ import { readComposerState } from "./cursor-state-reader";
 import type { ComposerState } from "./cursor-state-reader";
 import { buildStepperHtml } from "./stepper-html";
 import { createVexTreeEditorProvider } from "./vex-tree-editor-provider";
+import { lintAllVexFiles } from "./workflow-vex-lint";
 import { readWorkflowState } from "./workflow-state";
 import { cleanupWorkflowFiles, syncWorkflowToFiles } from "./workflow-sync";
 
@@ -86,7 +87,7 @@ export function activate(context: ExtensionContext): void {
   let pollTimer: ReturnType<typeof setInterval> | undefined;
   let ignoreNextFileChange = false;
 
-  function syncFiles(): void {
+  function syncFiles(lintErrors?: string[]): void {
     if (root.length === 0) {
       return;
     }
@@ -94,6 +95,7 @@ export function activate(context: ExtensionContext): void {
     syncWorkflowToFiles({
       activeId,
       enabled: workflowEnabled,
+      lintErrors,
       step: resolveStep(activeId, stepByTabId),
       workspaceRoot: root,
     });
@@ -185,6 +187,38 @@ export function activate(context: ExtensionContext): void {
     }
   }
 
+  async function handleExternalStepChange(fileState: { enabled: boolean; step: number }): Promise<void> {
+    if (activeId == null) {
+      return;
+    }
+    const prevStep = resolveStep(activeId, stepByTabId);
+    if (fileState.step === prevStep) {
+      return;
+    }
+    const isSpecToApprove = prevStep === 1 && fileState.step === 2;
+    if (isSpecToApprove) {
+      const lint = await lintAllVexFiles();
+      if (!lint.ok) {
+        stepByTabId = { ...stepByTabId, [activeId]: 1 };
+        persistState();
+        syncFiles(lint.errors);
+        if (activeWebviewView != null) {
+          sendWorkflowConfig(activeWebviewView);
+        }
+        void vscode.window.showWarningMessage(
+          `Vex lint: ${String(lint.errors.length)} error(s) found. Agent returned to Spec step.`,
+        );
+        return;
+      }
+    }
+    stepByTabId = { ...stepByTabId, [activeId]: fileState.step };
+    persistState();
+    syncFiles();
+    if (activeWebviewView != null) {
+      sendWorkflowConfig(activeWebviewView);
+    }
+  }
+
   if (root.length > 0) {
     const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root, ".vex-workflow"));
     watcher.onDidChange(() => {
@@ -196,14 +230,7 @@ export function activate(context: ExtensionContext): void {
       if (!fileState.enabled) {
         return;
       }
-      if (activeId != null && fileState.step !== resolveStep(activeId, stepByTabId)) {
-        stepByTabId = { ...stepByTabId, [activeId]: fileState.step };
-        persistState();
-        syncFiles();
-        if (activeWebviewView != null) {
-          sendWorkflowConfig(activeWebviewView);
-        }
-      }
+      void handleExternalStepChange(fileState);
     });
     context.subscriptions.push(watcher);
   }

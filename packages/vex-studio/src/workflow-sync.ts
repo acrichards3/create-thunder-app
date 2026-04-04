@@ -5,6 +5,7 @@ import { deleteWorkflowState, writeWorkflowState } from "./workflow-state";
 export type WorkflowSyncParams = {
   activeId: string | null;
   enabled: boolean;
+  lintErrors?: string[];
   step: number;
   workspaceRoot: string;
 };
@@ -19,7 +20,7 @@ export function syncWorkflowToFiles(params: WorkflowSyncParams): void {
     enabled: true,
     step: params.step,
   });
-  writeWorkflowRule(params.workspaceRoot, params.step);
+  writeWorkflowRule(params.workspaceRoot, params.step, params.lintErrors);
   installHooks(params.workspaceRoot);
 }
 

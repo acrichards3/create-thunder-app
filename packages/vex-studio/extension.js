@@ -46,7 +46,7 @@ __export(exports_extension, {
   activate: () => activate
 });
 module.exports = __toCommonJS(exports_extension);
-var vscode4 = __toESM(require("vscode"));
+var vscode5 = __toESM(require("vscode"));
 
 // src/cursor-state-reader.ts
 var import_node_child_process = require("node:child_process");
@@ -1118,6 +1118,115 @@ function parseVexDocument(source) {
   const documentOut = ok ? document : undefined;
   return { document: documentOut, errors, ok };
 }
+// src/vex-parse/validate.ts
+function countItNodes(body) {
+  if (body == null) {
+    return 0;
+  }
+  if (body.kind === "it") {
+    return 1;
+  }
+  return countItNodes(body.child);
+}
+function collectStructureErrors(body, path) {
+  const out = [];
+  if (body == null) {
+    out.push({ line: 0, message: `${path}: missing body (add an it or and chain).` });
+    return out;
+  }
+  if (body.kind === "it") {
+    return out;
+  }
+  if (body.child == null) {
+    out.push({
+      line: body.line,
+      message: `${path} (and "${body.label}"): missing child; add a nested and or an it.`
+    });
+    return out;
+  }
+  return out.concat(collectStructureErrors(body.child, `${path} > and "${body.label}"`));
+}
+function validateWhenBranch(pathPrefix, when) {
+  const path = `${pathPrefix} > when "${when.label}"`;
+  const branchErrors = [];
+  if (when.branches.length === 0) {
+    branchErrors.push({ line: when.line, message: `${path}: add at least one branch (an it or and chain).` });
+    return branchErrors;
+  }
+  const directIts = when.branches.filter((b) => b.kind === "it");
+  if (directIts.length > 1) {
+    const extra = directIts[1];
+    branchErrors.push({
+      line: extra.line,
+      message: `${path}: a when may have at most one it at this level; use and for additional branches.`
+    });
+  }
+  when.branches.forEach((branch, i) => {
+    const branchPath = `${path} > branch ${String(i + 1)}`;
+    const structural = collectStructureErrors(branch, branchPath);
+    branchErrors.push(...structural);
+    const itCount = countItNodes(branch);
+    const skipZero = itCount === 0 && structural.length > 0;
+    if (skipZero || itCount === 1) {
+      return;
+    }
+    branchErrors.push({
+      line: branch.line,
+      message: `${branchPath}: expected exactly one it (found ${String(itCount)}).`
+    });
+  });
+  return branchErrors;
+}
+function collectDuplicateLabelsInSiblings(blocks, path) {
+  const seen = new Set;
+  const out = [];
+  blocks.forEach((b) => {
+    if (seen.has(b.label)) {
+      out.push({ line: b.line, message: `${path}: duplicate describe label "${b.label}" among siblings.` });
+    }
+    seen.add(b.label);
+  });
+  return out;
+}
+function validateDescribeBlock(block, pathPrefix) {
+  const errors = [];
+  const path = `${pathPrefix}describe "${block.label}"`;
+  errors.push(...collectDuplicateLabelsInSiblings(block.nestedDescribes, path));
+  block.nestedDescribes.forEach((nested) => {
+    errors.push(...validateDescribeBlock(nested, `${path} > `));
+  });
+  block.whens.forEach((when) => {
+    errors.push(...validateWhenBranch(path, when));
+  });
+  return errors;
+}
+function validateVexDocument(document) {
+  const errors = [];
+  errors.push(...collectDuplicateLabelsInSiblings(document.describes, "Document"));
+  document.describes.forEach((root) => {
+    errors.push(...validateDescribeBlock(root, ""));
+  });
+  return errors;
+}
+function parseAndValidateVexDocument(source) {
+  const parsed = parseVexDocument(source);
+  if (!parsed.ok) {
+    return { document: undefined, errors: parsed.errors, ok: false };
+  }
+  const doc = parsed.document;
+  if (doc == null) {
+    return {
+      document: undefined,
+      errors: [{ line: 0, message: "Internal parse state: document missing when ok is true." }],
+      ok: false
+    };
+  }
+  const structuralErrors = validateVexDocument(doc);
+  if (structuralErrors.length > 0) {
+    return { document: undefined, errors: structuralErrors, ok: false };
+  }
+  return { document: doc, errors: [], ok: true };
+}
 // src/vex-edit-label.ts
 var vscode = __toESM(require("vscode"));
 function isRecord(value) {
@@ -1285,15 +1394,45 @@ function createVexTreeEditorProvider(context) {
   };
 }
 
-// src/workflow-state.ts
+// src/workflow-vex-lint.ts
 var import_node_fs = require("node:fs");
+var vscode4 = __toESM(require("vscode"));
+async function lintAllVexFiles() {
+  const files = await vscode4.workspace.findFiles("**/*.vex", "**/node_modules/**");
+  const errors = [];
+  files.forEach((uri) => {
+    const content = safeRead(uri.fsPath);
+    if (content.length === 0) {
+      return;
+    }
+    const result = parseAndValidateVexDocument(content);
+    if (result.ok) {
+      return;
+    }
+    const relativePath = vscode4.workspace.asRelativePath(uri);
+    result.errors.forEach((err) => {
+      errors.push(`${relativePath}:${String(err.line)}: ${err.message}`);
+    });
+  });
+  return { errors, ok: errors.length === 0 };
+}
+function safeRead(filePath) {
+  try {
+    return import_node_fs.readFileSync(filePath, "utf-8");
+  } catch {
+    return "";
+  }
+}
+
+// src/workflow-state.ts
+var import_node_fs2 = require("node:fs");
 var import_node_path2 = require("node:path");
 var FILENAME = ".vex-workflow";
 function workflowStatePath(workspaceRoot) {
   return import_node_path2.join(workspaceRoot, FILENAME);
 }
 function writeWorkflowState(workspaceRoot, state) {
-  import_node_fs.writeFileSync(workflowStatePath(workspaceRoot), JSON.stringify(state, null, 2), "utf-8");
+  import_node_fs2.writeFileSync(workflowStatePath(workspaceRoot), JSON.stringify(state, null, 2), "utf-8");
 }
 var EMPTY_WORKFLOW = { activeId: null, enabled: false, step: 0 };
 function readWorkflowState(workspaceRoot) {
@@ -1320,19 +1459,19 @@ function deleteWorkflowState(workspaceRoot) {
 }
 function safeReadFile(filePath) {
   try {
-    return import_node_fs.readFileSync(filePath, "utf-8");
+    return import_node_fs2.readFileSync(filePath, "utf-8");
   } catch {
     return "";
   }
 }
 function safeUnlink(filePath) {
   try {
-    import_node_fs.unlinkSync(filePath);
+    import_node_fs2.unlinkSync(filePath);
   } catch {}
 }
 
 // src/workflow-hooks-manager.ts
-var import_node_fs2 = require("node:fs");
+var import_node_fs3 = require("node:fs");
 var import_node_path3 = require("node:path");
 var HOOK_SCRIPT_PATH = ".cursor/hooks/vex-step-guard.sh";
 var HOOKS_JSON_PATH = ".cursor/hooks.json";
@@ -1351,26 +1490,26 @@ function uninstallHooks(workspaceRoot) {
 }
 function writeHookScript(workspaceRoot) {
   const filePath = import_node_path3.join(workspaceRoot, HOOK_SCRIPT_PATH);
-  import_node_fs2.mkdirSync(import_node_path3.join(workspaceRoot, ".cursor", "hooks"), { recursive: true });
-  import_node_fs2.writeFileSync(filePath, HOOK_SCRIPT_CONTENT, { mode: 493 });
+  import_node_fs3.mkdirSync(import_node_path3.join(workspaceRoot, ".cursor", "hooks"), { recursive: true });
+  import_node_fs3.writeFileSync(filePath, HOOK_SCRIPT_CONTENT, { mode: 493 });
 }
 function removeHookScript(workspaceRoot) {
   const filePath = import_node_path3.join(workspaceRoot, HOOK_SCRIPT_PATH);
   try {
-    import_node_fs2.unlinkSync(filePath);
+    import_node_fs3.unlinkSync(filePath);
   } catch {}
 }
 function readHooksJson(workspaceRoot) {
   const filePath = import_node_path3.join(workspaceRoot, HOOKS_JSON_PATH);
-  if (!import_node_fs2.existsSync(filePath)) {
+  if (!import_node_fs3.existsSync(filePath)) {
     return { hooks: { preToolUse: [] }, version: 1 };
   }
-  const raw = import_node_fs2.readFileSync(filePath, "utf-8");
+  const raw = import_node_fs3.readFileSync(filePath, "utf-8");
   return JSON.parse(raw);
 }
 function writeHooksJson(workspaceRoot, data) {
   const filePath = import_node_path3.join(workspaceRoot, HOOKS_JSON_PATH);
-  import_node_fs2.writeFileSync(filePath, JSON.stringify(data, null, 2) + `
+  import_node_fs3.writeFileSync(filePath, JSON.stringify(data, null, 2) + `
 `, "utf-8");
 }
 function isVexEntry(entry) {
@@ -1388,7 +1527,7 @@ function mergeHooksJson(workspaceRoot) {
 }
 function unmergeHooksJson(workspaceRoot) {
   const filePath = import_node_path3.join(workspaceRoot, HOOKS_JSON_PATH);
-  if (!import_node_fs2.existsSync(filePath)) {
+  if (!import_node_fs3.existsSync(filePath)) {
     return;
   }
   const data = readHooksJson(workspaceRoot);
@@ -1422,29 +1561,55 @@ fi
 TOOL=$(echo "$INPUT" | jq -r '.tool_name // empty')
 FILE=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 
-# Describe step — block everything except the .vex-advance signal
-if [ "$STEP" = "0" ]; then
-  BASENAME=$(basename "$FILE")
-  if [ "$TOOL" = "Write" ] && [ "$BASENAME" = ".vex-advance" ]; then
-    ACTIVE_ID=$(jq -r '.activeId // ""' "$STATE_FILE" 2>/dev/null)
-    printf '{"step":1,"enabled":true,"activeId":"%s"}' "$ACTIVE_ID" > "$STATE_FILE"
+BASENAME=$(basename "$FILE")
 
-    AGENT_MSG="The workflow has advanced to the **Spec** step (Step 2 of 6). The .vex-advance file was intercepted — no file was created. You will receive updated instructions for the Spec step in your next context."
-    echo "{\\"permission\\": \\"deny\\", \\"agent_message\\": $(echo "$AGENT_MSG" | jq -Rs .)}"
-    exit 2
-  fi
+advance_step() {
+  local NEXT_STEP="$1"
+  local NEXT_NAME="$2"
+  ACTIVE_ID=$(jq -r '.activeId // ""' "$STATE_FILE" 2>/dev/null)
+  printf '{"step":%d,"enabled":true,"activeId":"%s"}' "$NEXT_STEP" "$ACTIVE_ID" > "$STATE_FILE"
+  AGENT_MSG="The workflow has advanced to the **$NEXT_NAME** step. The .vex-advance file was intercepted — no file was created. You will receive updated instructions in your next context."
+  echo "{\\"permission\\": \\"deny\\", \\"agent_message\\": $(echo "$AGENT_MSG" | jq -Rs .)}"
+  exit 2
+}
 
-  AGENT_MSG="You are in the **Describe** step of the Vex workflow. You have NO write access. Do not create, modify, or delete files. Do not run shell commands. Focus on understanding the user's requirements and asking clarifying questions. When you are ready to proceed, write the file \\\`.vex-advance\\\` with the content \\\`spec\\\`."
-  USER_MSG="Blocked: agent attempted to use $TOOL during the Describe step (no write access)."
+deny_with_msg() {
+  local AGENT_MSG="$1"
+  local USER_MSG="$2"
   echo "{\\"permission\\": \\"deny\\", \\"agent_message\\": $(echo "$AGENT_MSG" | jq -Rs .), \\"user_message\\": $(echo "$USER_MSG" | jq -Rs .)}"
   exit 2
+}
+
+# Describe step — block everything except the .vex-advance signal
+if [ "$STEP" = "0" ]; then
+  if [ "$TOOL" = "Write" ] && [ "$BASENAME" = ".vex-advance" ]; then
+    advance_step 1 "Spec"
+  fi
+  deny_with_msg     "You are in the **Describe** step of the Vex workflow. You have NO write access. Focus on understanding the user's requirements and asking clarifying questions. When ready, write \\\`.vex-advance\\\` with the content \\\`spec\\\`."     "Blocked: agent attempted to use $TOOL during the Describe step (no write access)."
+fi
+
+# Spec step — allow .vex file writes only, block everything else
+if [ "$STEP" = "1" ]; then
+  if [ "$TOOL" = "Write" ] && [ "$BASENAME" = ".vex-advance" ]; then
+    advance_step 2 "Approve"
+  fi
+  if [ "$TOOL" = "Write" ] && [[ "$FILE" == *.vex ]]; then
+    echo '{"permission": "allow"}'
+    exit 0
+  fi
+  deny_with_msg     "You are in the **Spec** step of the Vex workflow. You may ONLY write \`.vex\` files. All other writes, deletes, and shell commands are blocked. When all specs are complete, write \`.vex-advance\` with the content \`approve\`."     "Blocked: agent attempted to use $TOOL on a non-.vex file during the Spec step."
+fi
+
+# Approve step — block everything, user is reviewing
+if [ "$STEP" = "2" ]; then
+  deny_with_msg     "You are in the **Approve** step of the Vex workflow. STOP. Do not take any actions. The user is reviewing your specs. Wait for them to approve or request changes."     "Blocked: agent attempted to use $TOOL during the Approve step (waiting for user review)."
 fi
 
 echo '{"permission": "allow"}'
 `;
 
 // src/workflow-rule-writer.ts
-var import_node_fs3 = require("node:fs");
+var import_node_fs4 = require("node:fs");
 var import_node_path4 = require("node:path");
 var RULE_FILENAME = ".cursor/rules/vex-workflow.mdc";
 function rulePath(workspaceRoot) {
@@ -1458,15 +1623,34 @@ var STEP_RULES = [
   verifyStepRule(),
   doneStepRule()
 ];
-function writeWorkflowRule(workspaceRoot, step) {
+function writeWorkflowRule(workspaceRoot, step, lintErrors) {
   const filePath = rulePath(workspaceRoot);
-  import_node_fs3.mkdirSync(import_node_path4.dirname(filePath), { recursive: true });
-  const content = STEP_RULES[step] ?? "";
-  import_node_fs3.writeFileSync(filePath, content, "utf-8");
+  import_node_fs4.mkdirSync(import_node_path4.dirname(filePath), { recursive: true });
+  let content = STEP_RULES[step] ?? "";
+  if (lintErrors != null && lintErrors.length > 0 && step === 1) {
+    content = injectLintErrors(content, lintErrors);
+  }
+  import_node_fs4.writeFileSync(filePath, content, "utf-8");
+}
+function injectLintErrors(ruleContent, errors) {
+  const errorBlock = [
+    "",
+    "### VALIDATION ERRORS",
+    "",
+    "Your previous `.vex` files have syntax or structural errors that **must** be fixed before you can advance.",
+    "Fix every error listed below, then write `.vex-advance` again.",
+    "",
+    "```",
+    ...errors,
+    "```",
+    ""
+  ].join(`
+`);
+  return ruleContent + errorBlock;
 }
 function deleteWorkflowRule(workspaceRoot) {
   try {
-    import_node_fs3.unlinkSync(rulePath(workspaceRoot));
+    import_node_fs4.unlinkSync(rulePath(workspaceRoot));
   } catch {}
 }
 function describeStepRule() {
@@ -1510,7 +1694,52 @@ alwaysApply: true
 
 You are operating inside the **Vex workflow**. The current step is **Spec**.
 
-_Spec step instructions are not yet implemented._
+### Your Role
+
+Based on the requirements gathered in the Describe step, you must now write \`.vex\` spec files that fully describe every behavior of the feature **before** any code is written.
+
+A \`.vex\` file is a plain-text spec format that maps the feature into a tree of behaviors:
+
+\`\`\`
+describe: Calculator
+    describe: Display
+        when: the app opens
+            it: Shows the digit 0 on the screen
+        when: a new result is ready
+            it: Replaces the display with the result
+    describe: Operations
+        when: the user taps an operator
+            it: Stores the operator and waits for the next operand
+        when: the user taps equals
+            it: Pops operands from the internal stack
+            and: the operation is defined for those operands
+                it: Computes and shows the result in the display
+\`\`\`
+
+#### Syntax rules
+
+- **\`describe:\`** — groups related behaviors. Can be nested.
+- **\`when:\`** — a condition or user action. Must be inside a \`describe:\`.
+- **\`and:\`** — an additional condition that narrows a \`when:\`. Must follow a \`when:\` or another \`and:\`.
+- **\`it:\`** — the expected outcome. Every \`when:\` (and \`and:\`) must end with at least one \`it:\`.
+- Indentation is 4 spaces per level. No tabs.
+- Labels are plain English — concise but descriptive.
+
+### Instructions
+
+1. Create or modify \`.vex\` files to cover **every** behavior, edge case, and error path from the requirements.
+2. Organize specs logically — one top-level \`describe:\` per major feature area.
+3. Be thorough. Every user-facing flow, validation rule, and error state should have a \`when:\`/\`it:\` pair.
+4. Place spec files in a sensible location (project root or a \`specs/\` directory).
+
+### Constraints
+
+- **You may ONLY write \`.vex\` files.** All other file writes, deletes, and shell commands will be blocked.
+- Do not write any implementation code, tests, or configuration — only \`.vex\` specs.
+
+### Advancing to the Next Step
+
+When you have finished writing all spec files and are confident every requirement is covered, write the file \`.vex-advance\` with the single word \`approve\` as its content. The system will intercept this write, advance the workflow to the **Approve** step, and you must then **stop immediately** — do not take any further actions after advancing.
 `;
 }
 function approveStepRule() {
@@ -1523,7 +1752,16 @@ alwaysApply: true
 
 You are operating inside the **Vex workflow**. The current step is **Approve**.
 
-_Approve step instructions are not yet implemented._
+### STOP
+
+The spec phase is complete. **Do not take any actions.** Do not write, modify, or delete any files. Do not run commands.
+
+The user is reviewing the \`.vex\` spec files you wrote. Wait for them to either:
+
+- **Approve** — they will advance the workflow to the Build step.
+- **Request changes** — they will ask you to revise specific specs, at which point the workflow will return to the Spec step.
+
+You have **no write access** during this step. Simply acknowledge that specs are ready for review and wait.
 `;
 }
 function buildStepRule() {
@@ -1577,7 +1815,7 @@ function syncWorkflowToFiles(params) {
     enabled: true,
     step: params.step
   });
-  writeWorkflowRule(params.workspaceRoot, params.step);
+  writeWorkflowRule(params.workspaceRoot, params.step, params.lintErrors);
   installHooks(params.workspaceRoot);
 }
 function cleanupWorkflowFiles(workspaceRoot) {
@@ -1593,7 +1831,7 @@ var POLL_MS = 2000;
 var STATE_KEY_STEPS = "vex.stepByTabId";
 var STATE_KEY_ENABLED = "vex.workflowEnabled";
 function getWorkspaceRoot() {
-  const folders = vscode4.workspace.workspaceFolders;
+  const folders = vscode5.workspace.workspaceFolders;
   if (folders == null || folders.length === 0) {
     return "";
   }
@@ -1606,17 +1844,17 @@ function resolveStep(activeId, steps) {
   return steps[activeId] ?? 0;
 }
 async function openVexTreeEditorForActiveFile() {
-  const doc = vscode4.window.activeTextEditor?.document;
+  const doc = vscode5.window.activeTextEditor?.document;
   if (doc == null) {
-    await vscode4.window.showInformationMessage("Open a .vex file first.");
+    await vscode5.window.showInformationMessage("Open a .vex file first.");
     return;
   }
   if (doc.languageId !== "vex" && !doc.uri.fsPath.toLowerCase().endsWith(".vex")) {
-    await vscode4.window.showInformationMessage("Open a .vex file first.");
+    await vscode5.window.showInformationMessage("Open a .vex file first.");
     return;
   }
-  await vscode4.commands.executeCommand("vscode.openWith", doc.uri, VEX_TREE_VIEW_TYPE, {
-    viewColumn: vscode4.ViewColumn.Active
+  await vscode5.commands.executeCommand("vscode.openWith", doc.uri, VEX_TREE_VIEW_TYPE, {
+    viewColumn: vscode5.ViewColumn.Active
   });
 }
 function composerStateChanged(prev, next) {
@@ -1641,11 +1879,11 @@ function composerStateChanged(prev, next) {
 }
 function activate(context) {
   const root = getWorkspaceRoot();
-  context.subscriptions.push(vscode4.window.registerCustomEditorProvider(VEX_TREE_VIEW_TYPE, createVexTreeEditorProvider(context), {
+  context.subscriptions.push(vscode5.window.registerCustomEditorProvider(VEX_TREE_VIEW_TYPE, createVexTreeEditorProvider(context), {
     supportsMultipleEditorsPerDocument: false,
     webviewOptions: { retainContextWhenHidden: false }
   }));
-  context.subscriptions.push(vscode4.commands.registerCommand("vex.panel.openEditorVisual", () => openVexTreeEditorForActiveFile()));
+  context.subscriptions.push(vscode5.commands.registerCommand("vex.panel.openEditorVisual", () => openVexTreeEditorForActiveFile()));
   let stepByTabId = context.globalState.get(STATE_KEY_STEPS) ?? {};
   let workflowEnabled = context.globalState.get(STATE_KEY_ENABLED) ?? true;
   let activeId = null;
@@ -1653,7 +1891,7 @@ function activate(context) {
   let lastComposerState = null;
   let pollTimer;
   let ignoreNextFileChange = false;
-  function syncFiles() {
+  function syncFiles(lintErrors) {
     if (root.length === 0) {
       return;
     }
@@ -1661,6 +1899,7 @@ function activate(context) {
     syncWorkflowToFiles({
       activeId,
       enabled: workflowEnabled,
+      lintErrors,
       step: resolveStep(activeId, stepByTabId),
       workspaceRoot: root
     });
@@ -1722,7 +1961,7 @@ function activate(context) {
       return;
     }
     if (type === "refreshWindow") {
-      vscode4.commands.executeCommand("workbench.action.reloadWindow");
+      vscode5.commands.executeCommand("workbench.action.reloadWindow");
       return;
     }
     if (type === "stepChanged") {
@@ -1744,8 +1983,37 @@ function activate(context) {
       }
     }
   }
+  async function handleExternalStepChange(fileState) {
+    if (activeId == null) {
+      return;
+    }
+    const prevStep = resolveStep(activeId, stepByTabId);
+    if (fileState.step === prevStep) {
+      return;
+    }
+    const isSpecToApprove = prevStep === 1 && fileState.step === 2;
+    if (isSpecToApprove) {
+      const lint = await lintAllVexFiles();
+      if (!lint.ok) {
+        stepByTabId = { ...stepByTabId, [activeId]: 1 };
+        persistState();
+        syncFiles(lint.errors);
+        if (activeWebviewView != null) {
+          sendWorkflowConfig(activeWebviewView);
+        }
+        vscode5.window.showWarningMessage(`Vex lint: ${String(lint.errors.length)} error(s) found. Agent returned to Spec step.`);
+        return;
+      }
+    }
+    stepByTabId = { ...stepByTabId, [activeId]: fileState.step };
+    persistState();
+    syncFiles();
+    if (activeWebviewView != null) {
+      sendWorkflowConfig(activeWebviewView);
+    }
+  }
   if (root.length > 0) {
-    const watcher = vscode4.workspace.createFileSystemWatcher(new vscode4.RelativePattern(root, ".vex-workflow"));
+    const watcher = vscode5.workspace.createFileSystemWatcher(new vscode5.RelativePattern(root, ".vex-workflow"));
     watcher.onDidChange(() => {
       if (ignoreNextFileChange) {
         ignoreNextFileChange = false;
@@ -1755,14 +2023,7 @@ function activate(context) {
       if (!fileState.enabled) {
         return;
       }
-      if (activeId != null && fileState.step !== resolveStep(activeId, stepByTabId)) {
-        stepByTabId = { ...stepByTabId, [activeId]: fileState.step };
-        persistState();
-        syncFiles();
-        if (activeWebviewView != null) {
-          sendWorkflowConfig(activeWebviewView);
-        }
-      }
+      handleExternalStepChange(fileState);
     });
     context.subscriptions.push(watcher);
   }
@@ -1786,7 +2047,7 @@ function activate(context) {
       startPolling();
     }
   };
-  context.subscriptions.push(vscode4.window.registerWebviewViewProvider(VIEW_ID, provider));
+  context.subscriptions.push(vscode5.window.registerWebviewViewProvider(VIEW_ID, provider));
   context.subscriptions.push({ dispose: stopPolling });
   context.subscriptions.push({
     dispose: () => {
